@@ -540,7 +540,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
       </div>
 
       {/* Inline Notes Edit Modal */}
-      {editingNotesEmail && (
+      {editingParticipant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4">
           <div className="bg-slate-900 rounded-2xl p-5 max-w-md w-full shadow-2xl border border-slate-800 space-y-4">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -548,7 +548,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               Edit Catatan Fasilitator
             </h3>
             <p className="text-xs text-slate-400">
-              Catatan untuk <strong className="text-slate-200">{editingNotesEmail}</strong>:
+              Catatan untuk <strong className="text-slate-200">{editingParticipant.name || editingParticipant.email}</strong> ({editingParticipant.email}):
             </p>
 
             <textarea
@@ -561,7 +561,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
 
             <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => setEditingNotesEmail(null)}
+                onClick={() => setEditingParticipant(null)}
                 className="px-4 py-2 text-xs font-semibold text-slate-300 rounded-xl border border-slate-800 hover:bg-slate-800"
               >
                 Batal

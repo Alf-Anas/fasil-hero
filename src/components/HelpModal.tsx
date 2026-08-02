@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, HelpCircle, Mail, Copy, Check, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react';
+import { X, HelpCircle, Mail, Copy, Check, ExternalLink, UserPlus, MessageSquare, Sparkles } from 'lucide-react';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -7,15 +7,15 @@ interface HelpModalProps {
 }
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
-  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleCopy = (email: string) => {
-    navigator.clipboard.writeText(email);
-    setCopiedEmail(email);
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLink(text);
     setTimeout(() => {
-      setCopiedEmail(null);
+      setCopiedLink(null);
     }, 2000);
   };
 
@@ -29,7 +29,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               <HelpCircle className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white">Bantuan & Kendala Teknis</h2>
+              <h2 className="text-lg font-black text-white">Bantuan & Informasi Program</h2>
               <p className="text-xs text-slate-400">
                 Pusat dukungan resmi Facilitator Google Arcade 2026
               </p>
@@ -43,10 +43,115 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Notice text */}
-        <div className="space-y-2">
-          <p className="text-xs text-slate-300 leading-relaxed font-medium">
-            Jika menemui kendala selama masa persiapan maupun pelaksanaan program, silakan hubungi tim kami sesuai dengan kategori berikut:
+        {/* Promotional Links Section */}
+        <div className="p-4 bg-gradient-to-br from-amber-500/10 via-slate-950 to-slate-950 border border-amber-500/30 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-amber-300 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#fbbc04]" />
+              Gabung / Daftar Sebagai Peserta Facilitator
+            </span>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#fbbc04]/20 text-[#fbbc04] border border-[#fbbc04]/30 uppercase tracking-wider">
+              Link Referral
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            Ingin bergabung atau mengajak rekan mendaftar sebagai peserta dalam program Facilitator Google Arcade? Gunakan link pendaftaran dan grup WhatsApp resmi berikut:
+          </p>
+
+          <div className="space-y-2 pt-1">
+            {/* Registration Link */}
+            <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-300 block">Link Pendaftaran Peserta</span>
+                  <a
+                    href="https://s.id/GoogleArcadeFacilitator"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono font-extrabold text-[#fbbc04] hover:underline truncate block"
+                  >
+                    https://s.id/GoogleArcadeFacilitator
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <a
+                  href="https://s.id/GoogleArcadeFacilitator"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors"
+                  title="Buka Link"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => handleCopy('https://s.id/GoogleArcadeFacilitator')}
+                  className="p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="Salin Link"
+                >
+                  {copiedLink === 'https://s.id/GoogleArcadeFacilitator' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* WA Group Link */}
+            <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 shrink-0">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold text-slate-300 block">Link Grup WhatsApp Peserta</span>
+                  <a
+                    href="https://s.id/GoogleArcadeWAGroup"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono font-extrabold text-[#fbbc04] hover:underline truncate block"
+                  >
+                    https://s.id/GoogleArcadeWAGroup
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <a
+                  href="https://s.id/GoogleArcadeWAGroup"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors"
+                  title="Buka Link"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => handleCopy('https://s.id/GoogleArcadeWAGroup')}
+                  className="p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="Salin Link"
+                >
+                  {copiedLink === 'https://s.id/GoogleArcadeWAGroup' ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Technical Support Section Heading */}
+        <div className="space-y-1 pt-1 border-t border-slate-800">
+          <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">Kendala Teknis & Bantuan Resmi</h3>
+          <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+            Jika menemui kendala selama masa persiapan maupun pelaksanaan program, silakan hubungi tim terkait berikut:
           </p>
         </div>
 
@@ -77,7 +182,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 onClick={() => handleCopy('arcade@dicoding.com')}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
               >
-                {copiedEmail === 'arcade@dicoding.com' ? (
+                {copiedLink === 'arcade@dicoding.com' ? (
                   <>
                     <Check className="w-3 h-3 text-emerald-400" />
                     <span>Tersalin!</span>
@@ -117,7 +222,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 onClick={() => handleCopy('arcade-facilitator@google.com')}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
               >
-                {copiedEmail === 'arcade-facilitator@google.com' ? (
+                {copiedLink === 'arcade-facilitator@google.com' ? (
                   <>
                     <Check className="w-3 h-3 text-emerald-400" />
                     <span>Tersalin!</span>
@@ -146,3 +251,4 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     </div>
   );
 };
+

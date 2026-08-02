@@ -204,31 +204,15 @@ export const ProjectListScreen: React.FC<ProjectListScreenProps> = ({
         </div>
 
         {projects.length === 0 ? (
-          <div className="p-8 sm:p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-4">
+          <div className="p-8 sm:p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-3">
             <div className="w-16 h-16 rounded-2xl bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center mx-auto">
               <FolderKanban className="w-8 h-8 text-[#fbbc04]" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="text-base font-extrabold text-white">Belum Ada Project</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Belum ada project yang dibuat. Klik tombol <strong className="text-slate-200">"Buat Project Baru"</strong> atau <strong className="text-slate-200">"Import Backup JSON"</strong> untuk membuat atau memulihkan batch pengerjaan.
+                Belum ada project yang dibuat.
               </p>
-            </div>
-            <div className="pt-2 flex items-center justify-center gap-3">
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#fbbc04] text-slate-950 font-black text-xs hover:bg-amber-400 transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                Buat Project Baru
-              </button>
-              <button
-                onClick={handleImportJsonFile}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-colors cursor-pointer"
-              >
-                <FileJson className="w-4 h-4 text-emerald-400" />
-                Import Backup JSON
-              </button>
             </div>
           </div>
         ) : (
