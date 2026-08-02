@@ -4,38 +4,48 @@ import { ParticipantRecord, ProjectRecord, SnapshotRecord } from '../types';
 export class FasilHeroDatabase extends Dexie {
   projects!: Table<ProjectRecord, string>;
   snapshots!: Table<SnapshotRecord, number>;
-  participants!: Table<ParticipantRecord, string>;
+  participants!: Table<ParticipantRecord, [string, string]>;
 
   constructor() {
     super('FasilHeroDB');
 
-    // Define tables and indexed keys
+    // Version 1 (Legacy schema)
     this.version(1).stores({
       projects: 'id, name, created_at',
       snapshots: '++id, project_id, snapshot_date, [project_id+snapshot_date]',
       participants: 'email, project_id, name, phone, wa_invited, first_seen_date, [project_id+email]',
+    });
+
+    // Version 2: Drop old participants table to allow primary key change
+    this.version(2).stores({
+      participants: null,
+    });
+
+    // Version 3: Re-create participants table with compound primary key [project_id+email]
+    this.version(3).stores({
+      projects: 'id, name, created_at',
+      snapshots: '++id, project_id, snapshot_date, [project_id+snapshot_date]',
+      participants: '[project_id+email], project_id, email, name, phone, wa_invited, first_seen_date',
     });
   }
 }
 
 export const db = new FasilHeroDatabase();
 
-// Default project ID for single-project fallback
-export const DEFAULT_PROJECT_ID = 'proj_arcade_2026';
-
-export async function ensureDefaultProjectExists(): Promise<ProjectRecord> {
-  const existing = await db.projects.get(DEFAULT_PROJECT_ID);
-  if (existing) {
-    return existing;
+// Automatic error recovery for IndexedDB primary key or schema migration issues
+db.open().catch(async (err) => {
+  console.warn('Dexie open error detected, auto-healing IndexedDB...', err);
+  if (
+    err.name === 'UpgradeError' ||
+    err.name === 'SchemaError' ||
+    err.message?.includes('primary key')
+  ) {
+    try {
+      await Dexie.delete('FasilHeroDB');
+      await db.open();
+      console.log('FasilHeroDB successfully reset and reopened.');
+    } catch (resetErr) {
+      console.error('Failed to reset database:', resetErr);
+    }
   }
-
-  const defaultProj: ProjectRecord = {
-    id: DEFAULT_PROJECT_ID,
-    name: 'Google Arcade Facilitator 2026',
-    description: 'Dashboard Tracking Peserta Program Google Arcade Facilitator Indonesia 2026',
-    created_at: new Date().toISOString(),
-  };
-
-  await db.projects.put(defaultProj);
-  return defaultProj;
-}
+});

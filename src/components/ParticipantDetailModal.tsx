@@ -36,10 +36,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await db.participants.update(participant.email, {
-        notes,
-        wa_invited: waInvited,
-      });
+      await db.participants
+        .where({ project_id: participant.project_id, email: participant.email })
+        .modify({
+          notes,
+          wa_invited: waInvited,
+        });
       setIsSaving(false);
       onUpdated();
       onClose();

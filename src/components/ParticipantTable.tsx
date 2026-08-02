@@ -45,7 +45,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   const [onlyNewFilter, setOnlyNewFilter] = useState<boolean>(false);
 
   // Notes Modal state
-  const [editingNotesEmail, setEditingNotesEmail] = useState<string | null>(null);
+  const [editingParticipant, setEditingParticipant] = useState<ParticipantRecord | null>(null);
   const [notesValue, setNotesValue] = useState<string>('');
 
   // Pagination state
@@ -53,12 +53,12 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   const [pageSize, setPageSize] = useState<number>(10);
 
   // Handle WA Invited toggle in Dexie IndexedDB
-  const handleToggleWaInvite = async (email: string, currentStatus: boolean, e: React.MouseEvent) => {
+  const handleToggleWaInvite = async (p: ParticipantRecord, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await db.participants.update(email, {
-        wa_invited: !currentStatus,
-      });
+      await db.participants
+        .where({ project_id: p.project_id, email: p.email })
+        .modify({ wa_invited: !p.wa_invited });
       onParticipantUpdated();
     } catch (err) {
       console.error('Failed to update WA invited status', err);
@@ -68,18 +68,18 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   // Open Notes Modal
   const handleStartEditNotes = (participant: ParticipantRecord, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingNotesEmail(participant.email);
+    setEditingParticipant(participant);
     setNotesValue(participant.notes || '');
   };
 
   // Save Notes to Dexie IndexedDB
   const handleSaveNotes = async () => {
-    if (!editingNotesEmail) return;
+    if (!editingParticipant) return;
     try {
-      await db.participants.update(editingNotesEmail, {
-        notes: notesValue,
-      });
-      setEditingNotesEmail(null);
+      await db.participants
+        .where({ project_id: editingParticipant.project_id, email: editingParticipant.email })
+        .modify({ notes: notesValue });
+      setEditingParticipant(null);
       onParticipantUpdated();
     } catch (err) {
       console.error('Failed to update participant notes', err);
@@ -348,12 +348,12 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               paginatedParticipants.map((p, idx) => {
                 const isNewParticipant = p.first_seen_date === selectedSnapshotDate;
                 const isRedeemed = p.access_code_status === 'Sudah Redeem';
-                const totalCombined = p.skill_badges_count + p.arcade_games_count;
+                const totalCombined = (p.skill_badges_count || 0) + (p.arcade_games_count || 0);
                 const rowNum = (currentPage - 1) * pageSize + idx + 1;
 
                 return (
                   <tr
-                    key={p.email}
+                    key={`${p.project_id}_${p.email}`}
                     onClick={() => onOpenDetail(p)}
                     className="hover:bg-slate-800/50 transition-colors cursor-pointer group"
                   >
@@ -410,7 +410,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                     {/* WA Invited Toggle */}
                     <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={(e) => handleToggleWaInvite(p.email, p.wa_invited, e)}
+                        onClick={(e) => handleToggleWaInvite(p, e)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
                           p.wa_invited
                             ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/30'

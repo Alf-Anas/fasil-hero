@@ -1,98 +1,43 @@
 import React, { useState } from 'react';
 import {
-  Upload,
-  Download,
-  Info,
-  Calendar,
-  FolderKanban,
-  FileJson,
-  Menu,
-  X,
   HelpCircle,
+  Calendar,
   Layers,
+  ArrowLeft,
 } from 'lucide-react';
 import { ProjectRecord, SnapshotRecord } from '../types';
-import { exportProjectToJson, importProjectFromJson } from '../utils/projectBackup';
 
 interface NavbarProps {
   currentProject: ProjectRecord | null;
-  projects: ProjectRecord[];
   snapshots: SnapshotRecord[];
   selectedSnapshotDate: string;
   isProjectViewActive: boolean;
-  onToggleProjectView: () => void;
-  onSelectProject: (projectId: string) => void;
+  onGoToProjectList: () => void;
   onSelectSnapshotDate: (date: string) => void;
-  onOpenUpload: () => void;
-  onOpenAbout: () => void;
   onOpenHelp: () => void;
-  onExportAll: () => void;
-  showToast: (msg: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentProject,
-  projects,
   snapshots,
   selectedSnapshotDate,
   isProjectViewActive,
-  onToggleProjectView,
-  onSelectProject,
+  onGoToProjectList,
   onSelectSnapshotDate,
-  onOpenUpload,
-  onOpenAbout,
   onOpenHelp,
-  onExportAll,
-  showToast,
 }) => {
   const [logoError, setLogoError] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleExportBackup = async () => {
-    if (!currentProject) return;
-    try {
-      await exportProjectToJson(currentProject.id);
-      showToast(`Backup JSON project "${currentProject.name}" berhasil di-download!`);
-    } catch (err: any) {
-      alert(`Gagal export backup: ${err.message}`);
-    }
-  };
-
-  const handleImportBackup = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        try {
-          const content = evt.target?.result as string;
-          const result = await importProjectFromJson(content);
-          onSelectProject(result.projectId);
-          showToast(
-            `Project "${result.projectName}" berhasil di-import! (${result.participantCount} peserta, ${result.snapshotCount} snapshot)`
-          );
-        } catch (err: any) {
-          alert(`Gagal import backup: ${err.message}`);
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  };
 
   return (
     <header className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 shadow-lg">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3">
-        <div className="flex items-center justify-between gap-2">
-          {/* Logo & Brand Name */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Logo & Brand Name - ALWAYS goes to Home / List Project */}
           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <button
-              onClick={onToggleProjectView}
-              className="flex items-center gap-2.5 group text-left cursor-pointer"
+              onClick={onGoToProjectList}
+              className="flex items-center gap-2.5 group text-left cursor-pointer focus:outline-none"
+              title="Halaman Awal (Daftar Project)"
             >
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 p-1 border border-slate-700/80 shadow-inner flex items-center justify-center shrink-0 overflow-hidden relative group-hover:border-[#fbbc04]/50 transition-colors">
                 {!logoError ? (
@@ -125,233 +70,50 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Desktop Controls */}
-          <div className="hidden lg:flex items-center gap-2">
-            {/* View Projects Manager button */}
-            <button
-              onClick={onToggleProjectView}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-extrabold rounded-xl transition-all cursor-pointer border ${
-                isProjectViewActive
-                  ? 'bg-[#fbbc04] text-slate-950 border-[#fbbc04]'
-                  : 'bg-slate-950 text-slate-200 border-slate-800 hover:border-slate-700 hover:bg-slate-800'
-              }`}
-            >
-              <Layers className="w-4 h-4 text-[#fbbc04]" />
-              <span>Daftar Project</span>
-            </button>
+          {/* Right Header Area */}
+          <div className="flex items-center gap-2">
+            {!isProjectViewActive && currentProject && (
+              <>
+                {/* Snapshot Date Selector */}
+                {snapshots.length > 0 && (
+                  <div className="hidden sm:flex items-center gap-1 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                    <Calendar className="w-3.5 h-3.5 text-[#fbbc04] ml-1 shrink-0" />
+                    <select
+                      value={selectedSnapshotDate}
+                      onChange={(e) => onSelectSnapshotDate(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none pr-1 cursor-pointer max-w-[130px] truncate"
+                    >
+                      {snapshots.map((s) => (
+                        <option key={s.snapshot_date} value={s.snapshot_date} className="bg-slate-900 text-slate-100">
+                          {s.snapshot_date}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-            {/* Current Project Dropdown Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-              <FolderKanban className="w-4 h-4 text-[#fbbc04] ml-1.5 shrink-0" />
-              <select
-                value={currentProject?.id || ''}
-                onChange={(e) => onSelectProject(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none pr-1 cursor-pointer"
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100">
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Snapshot Selector */}
-            {snapshots.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-                <Calendar className="w-4 h-4 text-[#fbbc04] ml-1.5 shrink-0" />
-                <span className="text-[11px] text-slate-400 font-medium">Snapshot:</span>
-                <select
-                  value={selectedSnapshotDate}
-                  onChange={(e) => onSelectSnapshotDate(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none pr-1 cursor-pointer"
+                {/* Back to Project List button */}
+                <button
+                  onClick={onGoToProjectList}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-extrabold transition-all cursor-pointer"
+                  title="Kembali ke Daftar Project"
                 >
-                  {snapshots.map((s) => (
-                    <option key={s.snapshot_date} value={s.snapshot_date} className="bg-slate-900 text-slate-100">
-                      {s.snapshot_date} ({s.total_participants} Peserta)
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <ArrowLeft className="w-3.5 h-3.5 text-[#fbbc04]" />
+                  <span className="hidden sm:inline">Daftar Project</span>
+                </button>
+              </>
             )}
 
-            {/* Bantuan Kendala Teknis button */}
+            {/* Help Button */}
             <button
               onClick={onOpenHelp}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
+              className="p-2 text-slate-400 hover:text-[#fbbc04] rounded-xl bg-slate-950 border border-slate-800 hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Bantuan & Kendala"
             >
-              <HelpCircle className="w-4 h-4 text-[#fbbc04]" />
-              <span>Bantuan & Kendala</span>
-            </button>
-
-            {/* Export / Import Backup JSON */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleExportBackup}
-                title="Export Backup Database Project ke File JSON"
-                className="inline-flex items-center gap-1.5 px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer"
-              >
-                <FileJson className="w-3.5 h-3.5 text-blue-400" />
-                <span>Export JSON</span>
-              </button>
-              <button
-                onClick={handleImportBackup}
-                title="Import Project dari File Backup JSON"
-                className="inline-flex items-center gap-1.5 px-2.5 py-2 text-xs font-bold rounded-xl bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Import JSON</span>
-              </button>
-            </div>
-
-            {/* Upload Snapshot Button */}
-            <button
-              onClick={onOpenUpload}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl bg-[#fbbc04] text-slate-950 hover:bg-amber-400 shadow-md shadow-[#fbbc04]/20 transition-all cursor-pointer shrink-0"
-            >
-              <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Upload Snapshot</span>
-            </button>
-
-            {/* Export Excel */}
-            <button
-              onClick={onExportAll}
-              title="Export Master Data Peserta ke Excel"
-              className="p-2 text-slate-300 hover:text-white rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-
-            {/* About Modal */}
-            <button
-              onClick={onOpenAbout}
-              className="p-2 text-slate-300 hover:text-white rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
-              title="Panduan Facilitator"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Mobile Action Bar Controls & Toggle */}
-          <div className="flex lg:hidden items-center gap-1.5">
-            <button
-              onClick={onToggleProjectView}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-800 border border-slate-700 text-slate-200"
-            >
-              <Layers className="w-3.5 h-3.5 text-[#fbbc04]" />
-              <span className="text-[11px]">Projects</span>
-            </button>
-
-            <button
-              onClick={onOpenUpload}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-[#fbbc04] text-slate-950 hover:bg-amber-400"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Upload</span>
-            </button>
-
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 text-slate-300 bg-slate-800 rounded-lg border border-slate-700 hover:bg-slate-700"
-            >
-              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <HelpCircle className="w-4 h-4" />
             </button>
           </div>
         </div>
-
-        {/* Mobile Dropdown Menu */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden mt-3 pt-3 border-t border-slate-800 space-y-3 animate-fadeIn">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {/* Project Select */}
-              <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800">
-                <div className="flex items-center gap-2">
-                  <FolderKanban className="w-4 h-4 text-[#fbbc04]" />
-                  <span className="text-xs text-slate-400">Project:</span>
-                </div>
-                <select
-                  value={currentProject?.id || ''}
-                  onChange={(e) => onSelectProject(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none max-w-[140px]"
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100">
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Snapshot Select */}
-              {snapshots.length > 0 && (
-                <div className="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-[#fbbc04]" />
-                    <span className="text-xs text-slate-400">Snapshot:</span>
-                  </div>
-                  <select
-                    value={selectedSnapshotDate}
-                    onChange={(e) => onSelectSnapshotDate(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-slate-200 focus:outline-none max-w-[140px]"
-                  >
-                    {snapshots.map((s) => (
-                      <option key={s.snapshot_date} value={s.snapshot_date} className="bg-slate-900 text-slate-100">
-                        {s.snapshot_date}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Mobile Actions */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <button
-                onClick={() => {
-                  onOpenHelp();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex items-center justify-center gap-1.5 p-2 bg-slate-800 rounded-xl border border-slate-700 text-slate-200 font-medium"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-[#fbbc04]" />
-                Bantuan
-              </button>
-
-              <button
-                onClick={() => {
-                  handleExportBackup();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex items-center justify-center gap-1.5 p-2 bg-slate-800 rounded-xl border border-slate-700 text-slate-200 font-medium"
-              >
-                <FileJson className="w-3.5 h-3.5 text-blue-400" />
-                Export JSON
-              </button>
-
-              <button
-                onClick={() => {
-                  handleImportBackup();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex items-center justify-center gap-1.5 p-2 bg-slate-800 rounded-xl border border-slate-700 text-slate-200 font-medium"
-              >
-                <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                Import JSON
-              </button>
-
-              <button
-                onClick={() => {
-                  onExportAll();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex items-center justify-center gap-1.5 p-2 bg-slate-800 rounded-xl border border-slate-700 text-slate-200 font-medium"
-              >
-                <Download className="w-3.5 h-3.5 text-indigo-400" />
-                Excel
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </header>
   );

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, ensureDefaultProjectExists, DEFAULT_PROJECT_ID } from './db';
+import { db } from './db';
 import { ParticipantRecord, ProjectRecord, SnapshotRecord } from './types';
 import { seedSampleData } from './utils/sampleData';
 import { exportParticipantsToExcel } from './utils/excelParser';
+import { exportProjectToJson } from './utils/projectBackup';
 
 import { Navbar } from './components/Navbar';
 import { TabNavigation, TabType } from './components/TabNavigation';
@@ -11,6 +12,7 @@ import { OverviewTab } from './components/OverviewTab';
 import { MilestoneCards, FACILITATOR_MILESTONES } from './components/MilestoneCards';
 import { ParticipantTable } from './components/ParticipantTable';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
+import { ProjectSettingsTab } from './components/ProjectSettingsTab';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ProjectListScreen } from './components/ProjectListScreen';
 
@@ -18,22 +20,29 @@ import { UploadModal } from './components/UploadModal';
 import { AboutModal } from './components/AboutModal';
 import { HelpModal } from './components/HelpModal';
 import { ParticipantDetailModal } from './components/ParticipantDetailModal';
+import { ProjectSettingsModal } from './components/ProjectSettingsModal';
+import { CreateProjectModal } from './components/CreateProjectModal';
+import { DeleteProjectModal } from './components/DeleteProjectModal';
 
 import { Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [currentProjectId, setCurrentProjectId] = useState<string>(DEFAULT_PROJECT_ID);
+  const [currentProjectId, setCurrentProjectId] = useState<string>('');
   const [selectedSnapshotDate, setSelectedSnapshotDate] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
-  // Toggle Project List Manager Screen vs Main Dashboard
-  const [isProjectViewActive, setIsProjectViewActive] = useState<boolean>(false);
+  // Set default view to Project List Screen on launch
+  const [isProjectViewActive, setIsProjectViewActive] = useState<boolean>(true);
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState<boolean>(false);
+  const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState<boolean>(false);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
+
   const [selectedParticipantForDetail, setSelectedParticipantForDetail] = useState<ParticipantRecord | null>(null);
 
   // Success Toast
@@ -49,29 +58,37 @@ export default function App() {
   // 1. Live Query Projects
   const projects = useLiveQuery(() => db.projects.toArray(), []) || [];
 
+  // Automatically select the first available project if currentProjectId is empty
+  useEffect(() => {
+    if (projects.length > 0 && !currentProjectId) {
+      setCurrentProjectId(projects[0].id);
+    }
+  }, [projects, currentProjectId]);
+
   // 2. Live Query Snapshots for current project
   const snapshots =
     useLiveQuery(
       () =>
-        db.snapshots
-          .where('project_id')
-          .equals(currentProjectId)
-          .reverse()
-          .sortBy('snapshot_date'),
+        currentProjectId
+          ? db.snapshots
+              .where('project_id')
+              .equals(currentProjectId)
+              .reverse()
+              .sortBy('snapshot_date')
+          : Promise.resolve([]),
       [currentProjectId]
     ) || [];
 
   // 3. Live Query Participants for current project
   const rawParticipants =
     useLiveQuery(
-      () => db.participants.where('project_id').equals(currentProjectId).toArray(),
+      () => (currentProjectId ? db.participants.where('project_id').equals(currentProjectId).toArray() : Promise.resolve([])),
       [currentProjectId]
     ) || [];
 
-  // Initialize DB (ensure default project exists, DO NOT auto-seed sample data)
+  // Initialize DB (NO auto-creation of default project)
   const initApp = useCallback(async () => {
     setIsInitializing(true);
-    await ensureDefaultProjectExists();
     setIsInitializing(false);
   }, []);
 
@@ -135,6 +152,28 @@ export default function App() {
     showToast(`Master data (${rawParticipants.length} peserta) berhasil diexport!`);
   };
 
+  const handleConfirmDeleteProject = async () => {
+    if (!projectToDelete) return;
+    const targetId = projectToDelete.id;
+    const targetName = projectToDelete.name;
+
+    await db.projects.delete(targetId);
+    await db.snapshots.where('project_id').equals(targetId).delete();
+    await db.participants.where('project_id').equals(targetId).delete();
+
+    showToast(`Project "${targetName}" berhasil dihapus.`);
+    setProjectToDelete(null);
+
+    const remaining = projects.filter((p) => p.id !== targetId);
+    if (remaining.length === 0) {
+      setCurrentProjectId('');
+      setIsProjectViewActive(true);
+    } else if (currentProjectId === targetId) {
+      setCurrentProjectId(remaining[0].id);
+      setIsProjectViewActive(true);
+    }
+  };
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -162,25 +201,16 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         currentProject={currentProject}
-        projects={projects}
         snapshots={snapshots}
         selectedSnapshotDate={selectedSnapshotDate}
         isProjectViewActive={isProjectViewActive}
-        onToggleProjectView={() => setIsProjectViewActive(!isProjectViewActive)}
-        onSelectProject={(id) => {
-          setCurrentProjectId(id);
-          setIsProjectViewActive(false);
-        }}
+        onGoToProjectList={() => setIsProjectViewActive(true)}
         onSelectSnapshotDate={(date) => setSelectedSnapshotDate(date)}
-        onOpenUpload={() => setIsUploadOpen(true)}
-        onOpenAbout={() => setIsAboutOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
-        onExportAll={handleExportAll}
-        showToast={showToast}
       />
 
-      {/* Tab Navigation (Displayed when in dashboard view and data exists) */}
-      {!isProjectViewActive && !isDataEmpty && (
+      {/* Tab Navigation (Displayed when in project detail view) */}
+      {!isProjectViewActive && currentProject && (
         <TabNavigation
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab)}
@@ -192,7 +222,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 flex-1">
-        {isProjectViewActive ? (
+        {isProjectViewActive || !currentProject ? (
           /* Project List Screen View */
           <ProjectListScreen
             projects={projects}
@@ -206,7 +236,21 @@ export default function App() {
               setIsProjectViewActive(false);
             }}
             onProjectDeleted={() => {
-              // Updated via live query
+              // IndexedDB live query automatically updates
+            }}
+            showToast={showToast}
+          />
+        ) : activeTab === 'settings' ? (
+          /* Settings Tab */
+          <ProjectSettingsTab
+            currentProject={currentProject}
+            participantCount={rawParticipants.length}
+            snapshotCount={snapshots.length}
+            onOpenUploadModal={() => setIsUploadOpen(true)}
+            onExportMasterExcel={handleExportAll}
+            onOpenDeleteModal={(p) => setProjectToDelete(p)}
+            onProjectUpdated={() => {
+              // Live query handles refresh
             }}
             showToast={showToast}
           />
@@ -224,7 +268,7 @@ export default function App() {
             showToast={showToast}
           />
         ) : (
-          /* Tab Contents */
+          /* Dashboard Tabs */
           <div className="space-y-6">
             {activeTab === 'overview' && (
               <OverviewTab
@@ -324,6 +368,43 @@ export default function App() {
         participant={selectedParticipantForDetail}
         onClose={() => setSelectedParticipantForDetail(null)}
         onUpdated={() => showToast('Catatan peserta berhasil diperbarui!')}
+      />
+
+      <CreateProjectModal
+        isOpen={isCreateProjectOpen}
+        onClose={() => setIsCreateProjectOpen(false)}
+        onProjectCreated={(newId) => {
+          setCurrentProjectId(newId);
+          setIsProjectViewActive(false);
+        }}
+        showToast={showToast}
+      />
+
+      <ProjectSettingsModal
+        isOpen={isProjectSettingsOpen}
+        currentProject={currentProject}
+        onClose={() => setIsProjectSettingsOpen(false)}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        onExportAllExcel={handleExportAll}
+        onOpenDeleteModal={(p) => setProjectToDelete(p)}
+        onSelectProject={(id) => setCurrentProjectId(id)}
+        showToast={showToast}
+      />
+
+      <DeleteProjectModal
+        isOpen={!!projectToDelete}
+        project={projectToDelete}
+        participantCount={rawParticipants.length}
+        snapshotCount={snapshots.length}
+        isLastProject={projects.length <= 1}
+        onClose={() => setProjectToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteProject}
+        onDownloadBackup={async () => {
+          if (projectToDelete) {
+            await exportProjectToJson(projectToDelete.id);
+            showToast(`Backup JSON "${projectToDelete.name}" berhasil di-download!`);
+          }
+        }}
       />
     </div>
   );

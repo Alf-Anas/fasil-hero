@@ -19,6 +19,7 @@ import { ProjectRecord } from '../types';
 import { db } from '../db';
 import { exportProjectToJson, importProjectFromJson } from '../utils/projectBackup';
 import { seedSampleData } from '../utils/sampleData';
+import { DeleteProjectModal } from './DeleteProjectModal';
 
 interface ProjectListScreenProps {
   projects: ProjectRecord[];
@@ -43,6 +44,8 @@ export const ProjectListScreen: React.FC<ProjectListScreenProps> = ({
   const [createOption, setCreateOption] = useState<'empty' | 'demo' | 'import'>('empty');
   const [isCreating, setIsCreating] = useState(false);
 
+  const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
+
   // Fetch participant counts & snapshot counts for each project
   const [projectStats, setProjectStats] = useState<Record<string, { participants: number; snapshots: number }>>({});
 
@@ -59,36 +62,30 @@ export const ProjectListScreen: React.FC<ProjectListScreenProps> = ({
     loadStats();
   }, [projects]);
 
-  const handleDeleteProject = async (e: React.MouseEvent, projectId: string, name: string) => {
+  const openDeleteModal = (e: React.MouseEvent, project: ProjectRecord) => {
     e.stopPropagation();
+    setProjectToDelete(project);
+  };
 
-    if (projects.length <= 1) {
-      alert('Tidak dapat menghapus project terakhir! Anda harus menyisakan minimal 1 project.');
-      return;
+  const handleConfirmDeleteProject = async () => {
+    if (!projectToDelete) return;
+    const targetId = projectToDelete.id;
+    const targetName = projectToDelete.name;
+
+    await db.projects.delete(targetId);
+    await db.snapshots.where('project_id').equals(targetId).delete();
+    await db.participants.where('project_id').equals(targetId).delete();
+
+    showToast(`Project "${targetName}" berhasil dihapus.`);
+
+    const remaining = projects.filter((p) => p.id !== targetId);
+    if (remaining.length === 0) {
+      onSelectProject('');
+    } else if (currentProjectId === targetId) {
+      onSelectProject(remaining[0].id);
     }
 
-    if (!confirm(`Apakah Anda yakin ingin menghapus project "${name}" beserta seluruh data snapshot dan pesertanya? Action ini tidak dapat dibatalkan.`)) {
-      return;
-    }
-
-    try {
-      await db.projects.delete(projectId);
-      await db.snapshots.where('project_id').equals(projectId).delete();
-      await db.participants.where('project_id').equals(projectId).delete();
-
-      onProjectDeleted();
-      showToast(`Project "${name}" berhasil dihapus.`);
-
-      // Switch to another project if current was deleted
-      if (currentProjectId === projectId) {
-        const remaining = projects.find((p) => p.id !== projectId);
-        if (remaining) {
-          onSelectProject(remaining.id);
-        }
-      }
-    } catch (err: any) {
-      alert('Gagal menghapus project: ' + err.message);
-    }
+    onProjectDeleted();
   };
 
   const handleExportBackup = async (e: React.MouseEvent, projectId: string, name: string) => {
@@ -206,109 +203,115 @@ export const ProjectListScreen: React.FC<ProjectListScreenProps> = ({
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((p) => {
-            const isSelected = p.id === currentProjectId;
-            const stats = projectStats[p.id] || { participants: 0, snapshots: 0 };
-
-            return (
-              <div
-                key={p.id}
-                onClick={() => onSelectProject(p.id)}
-                className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 group relative ${
-                  isSelected
-                    ? 'bg-slate-900 border-[#fbbc04]/60 shadow-xl ring-2 ring-[#fbbc04]/20'
-                    : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                }`}
+        {projects.length === 0 ? (
+          <div className="p-8 sm:p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center mx-auto">
+              <FolderKanban className="w-8 h-8 text-[#fbbc04]" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h3 className="text-base font-extrabold text-white">Belum Ada Project</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Belum ada project yang dibuat. Klik tombol <strong className="text-slate-200">"Buat Project Baru"</strong> atau <strong className="text-slate-200">"Import Backup JSON"</strong> untuk membuat atau memulihkan batch pengerjaan.
+              </p>
+            </div>
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#fbbc04] text-slate-950 font-black text-xs hover:bg-amber-400 transition-all cursor-pointer"
               >
-                {/* Active Tag */}
-                {isSelected && (
-                  <span className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#fbbc04]/15 text-[#fbbc04] border border-[#fbbc04]/30 uppercase">
-                    Project Aktif
-                  </span>
-                )}
+                <Plus className="w-4 h-4 stroke-[3]" />
+                Buat Project Baru
+              </button>
+              <button
+                onClick={handleImportJsonFile}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                <FileJson className="w-4 h-4 text-emerald-400" />
+                Import Backup JSON
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((p) => {
+              const stats = projectStats[p.id] || { participants: 0, snapshots: 0 };
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`p-3 rounded-2xl border ${
-                        isSelected
-                          ? 'bg-[#fbbc04]/15 text-[#fbbc04] border-[#fbbc04]/30'
-                          : 'bg-slate-950 text-slate-400 border-slate-800 group-hover:text-[#fbbc04]'
-                      }`}
-                    >
-                      <FolderOpen className="w-6 h-6" />
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => onSelectProject(p.id)}
+                  className="p-5 rounded-3xl border border-slate-800 bg-slate-900/80 hover:border-slate-700 hover:bg-slate-900 transition-all cursor-pointer flex flex-col justify-between space-y-4 group relative"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 rounded-2xl border bg-slate-950 text-slate-400 border-slate-800 group-hover:text-[#fbbc04] group-hover:border-[#fbbc04]/30 transition-colors">
+                        <FolderOpen className="w-6 h-6" />
+                      </div>
+                      <div className="pr-4">
+                        <h3 className="text-base font-extrabold text-white group-hover:text-[#fbbc04] transition-colors line-clamp-1">
+                          {p.name}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          Dibuat: {new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="pr-16">
-                      <h3 className="text-base font-extrabold text-white group-hover:text-[#fbbc04] transition-colors line-clamp-1">
-                        {p.name}
-                      </h3>
-                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                        Dibuat: {new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
+
+                    <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                      {p.description || 'Project Facilitator Google Arcade'}
+                    </p>
+
+                    {/* Stats Badges */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-xs">
+                      <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80 text-center">
+                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Peserta</span>
+                        <span className="font-extrabold text-white text-sm flex items-center justify-center gap-1">
+                          <Users className="w-3.5 h-3.5 text-blue-400" /> {stats.participants}
+                        </span>
+                      </div>
+
+                      <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80 text-center">
+                        <span className="text-slate-400 block text-[10px] font-bold uppercase">Snapshots</span>
+                        <span className="font-extrabold text-white text-sm flex items-center justify-center gap-1">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> {stats.snapshots}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                    {p.description || 'Project Facilitator Google Arcade'}
-                  </p>
-
-                  {/* Stats Badges */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-xs">
-                    <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80 text-center">
-                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Peserta</span>
-                      <span className="font-extrabold text-white text-sm flex items-center justify-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-blue-400" /> {stats.participants}
-                      </span>
-                    </div>
-
-                    <div className="p-2 bg-slate-950 rounded-xl border border-slate-800/80 text-center">
-                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Snapshots</span>
-                      <span className="font-extrabold text-white text-sm flex items-center justify-center gap-1">
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> {stats.snapshots}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions Footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={(e) => handleExportBackup(e, p.id, p.name)}
-                      title="Download Backup JSON Project"
-                      className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-colors cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-
-                    {projects.length > 1 && (
+                  {/* Actions Footer */}
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={(e) => handleDeleteProject(e, p.id, p.name)}
+                        onClick={(e) => handleExportBackup(e, p.id, p.name)}
+                        title="Download Backup JSON Project"
+                        className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-colors cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={(e) => openDeleteModal(e, p)}
                         title="Hapus Project"
                         className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
+                    </div>
 
-                  <button
-                    onClick={() => onSelectProject(p.id)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#fbbc04] text-slate-950 hover:bg-amber-400'
-                        : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                    }`}
-                  >
-                    <span>{isSelected ? 'Buka Project' : 'Pilih Project'}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      onClick={() => onSelectProject(p.id)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-[#fbbc04] text-slate-950 hover:bg-amber-400 transition-all cursor-pointer"
+                    >
+                      <span>Buka Project</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Modal Buat Project Baru */}
@@ -438,6 +441,22 @@ export const ProjectListScreen: React.FC<ProjectListScreenProps> = ({
           </div>
         </div>
       )}
+      {/* Delete Project Modal */}
+      <DeleteProjectModal
+        isOpen={!!projectToDelete}
+        project={projectToDelete}
+        participantCount={projectToDelete ? projectStats[projectToDelete.id]?.participants || 0 : 0}
+        snapshotCount={projectToDelete ? projectStats[projectToDelete.id]?.snapshots || 0 : 0}
+        isLastProject={projects.length <= 1}
+        onClose={() => setProjectToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteProject}
+        onDownloadBackup={async () => {
+          if (projectToDelete) {
+            await exportProjectToJson(projectToDelete.id);
+            showToast(`Backup JSON "${projectToDelete.name}" berhasil di-download!`);
+          }
+        }}
+      />
     </div>
   );
 };

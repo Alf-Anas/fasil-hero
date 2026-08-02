@@ -1,4 +1,4 @@
-import { db, DEFAULT_PROJECT_ID, ensureDefaultProjectExists } from '../db';
+import { db } from '../db';
 import { ParticipantRecord, RawParticipantRow, SnapshotRecord } from '../types';
 
 export const SAMPLE_PARTICIPANTS_DATA: Array<{
@@ -303,10 +303,10 @@ export const SAMPLE_PARTICIPANTS_DATA: Array<{
 ];
 
 /**
- * Seed sample data into Dexie IndexedDB if database is empty
+ * Seed sample data into Dexie IndexedDB for a target project
  */
-export async function seedSampleData(force = false, targetProjectId: string = DEFAULT_PROJECT_ID): Promise<void> {
-  await ensureDefaultProjectExists();
+export async function seedSampleData(force = false, targetProjectId: string): Promise<void> {
+  if (!targetProjectId) return;
 
   const existingSnapshots = await db.snapshots.where('project_id').equals(targetProjectId).count();
   if (existingSnapshots > 0 && !force) {
