@@ -16,7 +16,7 @@ export function normalizeKey(key: string): string {
 /**
  * Helper to extract number from cell value
  */
-function parseNumberCell(val: any): number {
+export function parseNumberCell(val: any): number {
   if (val === undefined || val === null || val === '') return 0;
   const num = Number(val);
   return isNaN(num) ? 0 : num;
@@ -25,7 +25,7 @@ function parseNumberCell(val: any): number {
 /**
  * Helper to normalize access code status
  */
-function normalizeAccessCodeStatus(status: any): string {
+export function normalizeAccessCodeStatus(status: any): string {
   if (!status) return 'Belum Redeem';
   const str = String(status).trim();
   const lower = str.toLowerCase();

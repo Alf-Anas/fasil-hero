@@ -8,23 +8,45 @@ import {
   Edit2,
   PhoneCall,
   UserPlus,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
   Check,
   Info,
   Layers,
-  Trophy,
+  Eye,
+  EyeOff,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Calendar,
 } from 'lucide-react';
-import { ParticipantRecord } from '../types';
+import { ParticipantRecord, SnapshotRecord, RawParticipantRow } from '../types';
 import { db } from '../db';
-import { PARTICIPANT_MILESTONES_CONFIG, calculateHighestMilestone } from '../utils/milestones';
+import { calculateHighestMilestone } from '../utils/milestones';
+import { maskEmail, maskPhone } from '../utils/masking';
+import { parseNumberCell, normalizeAccessCodeStatus } from '../utils/excelParser';
+
+type SortField =
+  | 'name'
+  | 'email'
+  | 'access_code_status'
+  | 'calculated_milestone'
+  | 'wa_invited'
+  | 'skill_badges_count'
+  | 'arcade_games_count'
+  | 'total_combined'
+  | 'first_seen_date';
+
+type SortDirection = 'asc' | 'desc';
 
 interface ParticipantTableProps {
   participants: ParticipantRecord[];
+  snapshots?: SnapshotRecord[];
   allFirstSeenDates: string[];
   selectedSnapshotDate: string;
+  hideSensitive?: boolean;
+  onToggleHideSensitive?: () => void;
   onParticipantUpdated: () => void;
   onOpenDetail: (participant: ParticipantRecord) => void;
   onExportFiltered: (filtered: ParticipantRecord[]) => void;
@@ -32,8 +54,11 @@ interface ParticipantTableProps {
 
 export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   participants,
+  snapshots = [],
   allFirstSeenDates,
   selectedSnapshotDate,
+  hideSensitive = false,
+  onToggleHideSensitive,
   onParticipantUpdated,
   onOpenDetail,
   onExportFiltered,
@@ -47,6 +72,10 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   const [milestoneFilter, setMilestoneFilter] = useState<string>('ALL'); // ALL, ULTIMATE, M3, M2, M1, NONE
   const [onlyNewFilter, setOnlyNewFilter] = useState<boolean>(false);
 
+  // Sorting States
+  const [sortField, setSortField] = useState<SortField>('total_combined');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
   // Notes Modal state
   const [editingParticipant, setEditingParticipant] = useState<ParticipantRecord | null>(null);
   const [notesValue, setNotesValue] = useState<string>('');
@@ -54,6 +83,61 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+
+  // 1. Snapshot Specific Data Parsing
+  const displayedParticipants = useMemo(() => {
+    if (!selectedSnapshotDate || snapshots.length === 0) {
+      return participants;
+    }
+
+    const matchingSnapshot = snapshots.find((s) => s.snapshot_date === selectedSnapshotDate);
+    if (!matchingSnapshot || !matchingSnapshot.raw_data_json) {
+      return participants;
+    }
+
+    try {
+      const rawRows: RawParticipantRow[] = JSON.parse(matchingSnapshot.raw_data_json);
+      const masterMap = new Map<string, ParticipantRecord>();
+      participants.forEach((p) => masterMap.set(p.email.toLowerCase().trim(), p));
+
+      return rawRows.map((row) => {
+        const rawEmail = row['Email Peserta'] || '';
+        const email = rawEmail.toLowerCase().trim();
+        const masterP = masterMap.get(email);
+
+        const skillBadges = parseNumberCell(row['Jumlah Lencana Keahlian yang diselesaikan']);
+        const arcadeGames = parseNumberCell(row['Jumlah Arcade Game yang diselesaikan']);
+        const accessCodeStatus = normalizeAccessCodeStatus(row['Status Redeem Kode Akses']);
+
+        return {
+          email: email,
+          project_id: matchingSnapshot.project_id,
+          name: row['Nama Peserta'] || masterP?.name || email,
+          phone: row['Nomor HP Peserta'] || masterP?.phone || '',
+          access_code_status: accessCodeStatus,
+          skills_profile_url: row['Status Google Skills URL Profil'] || masterP?.skills_profile_url || '',
+          developer_profile_url: row['Status URL Profil Google Developer'] || masterP?.developer_profile_url || '',
+          milestone_reached: row['Milestone Diraih'] || masterP?.milestone_reached || '',
+          gear_digital_badge: row['Lencana GEAR'] || masterP?.gear_digital_badge || '',
+          skill_badges_count: skillBadges,
+          skill_badges_names: row['Nama Lencana Keahlian yang diselesaikan'] || '',
+          arcade_games_count: arcadeGames,
+          arcade_games_names: row['Nama Arcade Game yang diselesaikan'] || '',
+          calculated_milestone: calculateHighestMilestone(arcadeGames, skillBadges),
+          milestone_1_date: masterP?.milestone_1_date,
+          milestone_2_date: masterP?.milestone_2_date,
+          milestone_3_date: masterP?.milestone_3_date,
+          ultimate_milestone_date: masterP?.ultimate_milestone_date,
+          wa_invited: masterP ? masterP.wa_invited : false,
+          notes: masterP ? masterP.notes : '',
+          first_seen_date: masterP ? masterP.first_seen_date : matchingSnapshot.snapshot_date,
+        } as ParticipantRecord;
+      });
+    } catch (e) {
+      console.error('Failed to parse snapshot raw_data_json', e);
+      return participants;
+    }
+  }, [participants, snapshots, selectedSnapshotDate]);
 
   // Handle WA Invited toggle in Dexie IndexedDB
   const handleToggleWaInvite = async (p: ParticipantRecord, e: React.MouseEvent) => {
@@ -112,9 +196,19 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
     return `https://wa.me/${cleanPhone}?text=${message}`;
   };
 
+  // Sort Handler
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'name' || field === 'email' ? 'asc' : 'desc');
+    }
+  };
+
   // Filtering Logic
   const filteredParticipants = useMemo(() => {
-    return participants.filter((p) => {
+    return displayedParticipants.filter((p) => {
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const matchName = p.name.toLowerCase().includes(term);
@@ -151,7 +245,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
       return true;
     });
   }, [
-    participants,
+    displayedParticipants,
     searchTerm,
     redeemFilter,
     waInviteFilter,
@@ -162,15 +256,90 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
     selectedSnapshotDate,
   ]);
 
+  // Sorting Logic
+  const sortedParticipants = useMemo(() => {
+    const list = [...filteredParticipants];
+    return list.sort((a, b) => {
+      let valA: any;
+      let valB: any;
+
+      switch (sortField) {
+        case 'name':
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+          break;
+        case 'email':
+          valA = a.email.toLowerCase();
+          valB = b.email.toLowerCase();
+          break;
+        case 'access_code_status':
+          valA = a.access_code_status;
+          valB = b.access_code_status;
+          break;
+        case 'wa_invited':
+          valA = a.wa_invited ? 1 : 0;
+          valB = b.wa_invited ? 1 : 0;
+          break;
+        case 'skill_badges_count':
+          valA = a.skill_badges_count || 0;
+          valB = b.skill_badges_count || 0;
+          break;
+        case 'arcade_games_count':
+          valA = a.arcade_games_count || 0;
+          valB = b.arcade_games_count || 0;
+          break;
+        case 'total_combined':
+          valA = (a.skill_badges_count || 0) + (a.arcade_games_count || 0);
+          valB = (b.skill_badges_count || 0) + (b.arcade_games_count || 0);
+          break;
+        case 'first_seen_date':
+          valA = a.first_seen_date || '';
+          valB = b.first_seen_date || '';
+          break;
+        case 'calculated_milestone': {
+          const rankMap: Record<string, number> = {
+            'Ultimate Milestone': 4,
+            'Milestone 3': 3,
+            'Milestone 2': 2,
+            'Milestone 1': 1,
+            'Belum Milestone': 0,
+          };
+          valA = rankMap[a.calculated_milestone || calculateHighestMilestone(a.arcade_games_count, a.skill_badges_count)] || 0;
+          valB = rankMap[b.calculated_milestone || calculateHighestMilestone(b.arcade_games_count, b.skill_badges_count)] || 0;
+          break;
+        }
+        default:
+          valA = (a.skill_badges_count || 0) + (a.arcade_games_count || 0);
+          valB = (b.skill_badges_count || 0) + (b.arcade_games_count || 0);
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredParticipants, sortField, sortDirection]);
+
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, redeemFilter, waInviteFilter, firstSeenFilter, badgeTierFilter, milestoneFilter, onlyNewFilter]);
+  }, [searchTerm, redeemFilter, waInviteFilter, firstSeenFilter, badgeTierFilter, milestoneFilter, onlyNewFilter, sortField, sortDirection]);
 
-  const totalPages = Math.ceil(filteredParticipants.length / pageSize) || 1;
+  const totalPages = Math.ceil(sortedParticipants.length / pageSize) || 1;
   const paginatedParticipants = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return filteredParticipants.slice(startIdx, startIdx + pageSize);
-  }, [filteredParticipants, currentPage, pageSize]);
+    return sortedParticipants.slice(startIdx, startIdx + pageSize);
+  }, [sortedParticipants, currentPage, pageSize]);
+
+  // Render Sort Icon Helper
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60 group-hover:opacity-100 transition-opacity" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="w-3 h-3 text-blue-400 font-black" />
+    ) : (
+      <ArrowDown className="w-3 h-3 text-blue-400 font-black" />
+    );
+  };
 
   return (
     <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-md overflow-hidden space-y-4 p-4 sm:p-5">
@@ -185,40 +354,80 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Klik nomor HP untuk membuka WhatsApp (https://wa.me/...).
+            Klik nomor HP untuk membuka WhatsApp. Gunakan tombol sort header untuk mengurutkan kolom.
           </p>
         </div>
 
-        <button
-          onClick={() => onExportFiltered(filteredParticipants)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors cursor-pointer shrink-0"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-          Export Excel (.xlsx)
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Hide Sensitive Data Toggle */}
+          <button
+            onClick={() => onToggleHideSensitive && onToggleHideSensitive()}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer shrink-0 ${
+              hideSensitive
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs shadow-amber-500/10'
+                : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+            }`}
+            title={hideSensitive ? 'Data email & HP disembunyikan' : 'Sembunyikan email & no HP untuk screenshot/share'}
+          >
+            {hideSensitive ? (
+              <EyeOff className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Eye className="w-4 h-4 text-slate-400" />
+            )}
+            <span>{hideSensitive ? 'Sensitif: Sembunyi' : 'Sembunyikan Data Sensitif'}</span>
+          </button>
+
+          <button
+            onClick={() => onExportFiltered(filteredParticipants)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors cursor-pointer shrink-0"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            Export Excel (.xlsx)
+          </button>
+        </div>
       </div>
+
+      {/* Snapshot Date Active Indicator */}
+      {selectedSnapshotDate && (
+        <div className="flex items-center justify-between bg-blue-950/40 border border-blue-800/60 rounded-xl px-3.5 py-2 text-xs text-blue-200">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+            <span>
+              Menampilkan data snapshot tanggal: <strong className="text-white font-mono">{selectedSnapshotDate}</strong> ({displayedParticipants.length} peserta tercatat)
+            </span>
+          </div>
+          <span className="text-[10px] bg-blue-500/20 px-2 py-0.5 rounded-full text-blue-300 border border-blue-500/30 font-semibold">
+            Snapshot Filtered
+          </span>
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          {/* Search Bar */}
-          <div className="relative lg:col-span-2">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Cari Nama, Email, No HP..."
-              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-900 text-slate-100 placeholder-slate-500 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
-              >
-                ✕
-              </button>
-            )}
+          {/* Search Bar - Fixed alignment with label */}
+          <div className="relative lg:col-span-2 flex flex-col justify-end">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+              Pencarian Peserta
+            </label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari Nama, Email, No HP..."
+                className="w-full pl-9 pr-8 py-2 text-xs bg-slate-900 text-slate-100 placeholder-slate-500 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Filter Milestone Peserta */}
@@ -283,93 +492,167 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               className="w-full py-2 px-2 text-xs bg-slate-900 text-slate-100 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
             >
               <option value="ALL">Semua Tanggal</option>
-              {allFirstSeenDates.map((d) => (
-                <option key={d} value={d}>
-                  {d}
+              {allFirstSeenDates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Secondary Filter Buttons & Toggles */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-            <span className="text-xs text-slate-400 font-medium shrink-0">Tier:</span>
-            <div className="flex items-center gap-1 shrink-0">
-              {[
-                { id: 'ALL', label: 'Semua' },
-                { id: 'ZERO', label: '0 Badges' },
-                { id: '1_10', label: '1 - 10' },
-                { id: '11_25', label: '11 - 25' },
-                { id: '26_PLUS', label: '26+' },
-              ].map((tier) => (
-                <button
-                  key={tier.id}
-                  onClick={() => setBadgeTierFilter(tier.id)}
-                  className={`px-2.5 py-1 text-[11px] rounded-lg font-bold transition-colors cursor-pointer ${
-                    badgeTierFilter === tier.id
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-slate-200'
-                  }`}
-                >
-                  {tier.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-xs text-slate-300 font-medium cursor-pointer">
-              <input
-                type="checkbox"
-                checked={onlyNewFilter}
-                onChange={(e) => setOnlyNewFilter(e.target.checked)}
-                className="rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500"
-              />
-              <span className="inline-flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                Hanya Baru di {selectedSnapshotDate || 'Snapshot'}
-              </span>
-            </label>
-
-            {(searchTerm || redeemFilter !== 'ALL' || waInviteFilter !== 'ALL' || firstSeenFilter !== 'ALL' || badgeTierFilter !== 'ALL' || milestoneFilter !== 'ALL' || onlyNewFilter) && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setRedeemFilter('ALL');
-                  setWaInviteFilter('ALL');
-                  setFirstSeenFilter('ALL');
-                  setBadgeTierFilter('ALL');
-                  setMilestoneFilter('ALL');
-                  setOnlyNewFilter(false);
-                }}
-                className="text-xs text-blue-400 font-medium hover:underline ml-auto"
+        {/* Second Row Filters */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
+          <div className="flex items-center gap-4 flex-wrap text-xs text-slate-300">
+            {/* Filter Badge Tier */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Total Poin:</span>
+              <select
+                value={badgeTierFilter}
+                onChange={(e) => setBadgeTierFilter(e.target.value)}
+                className="py-1 px-2 text-xs bg-slate-900 text-slate-100 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
               >
-                Reset
-              </button>
+                <option value="ALL">Semua</option>
+                <option value="ZERO">0 Badges/Games</option>
+                <option value="1_10">1 - 10 Point</option>
+                <option value="11_25">11 - 25 Point</option>
+                <option value="26_PLUS">26+ Point</option>
+              </select>
+            </div>
+
+            {/* Checkbox Only New */}
+            {selectedSnapshotDate && (
+              <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={onlyNewFilter}
+                  onChange={(e) => setOnlyNewFilter(e.target.checked)}
+                  className="rounded border-slate-700 text-blue-500 focus:ring-0 cursor-pointer"
+                />
+                <span className="text-xs font-medium text-slate-200">
+                  Hanya Peserta Baru di Snapshot Ini
+                </span>
+              </label>
             )}
           </div>
+
+          {(searchTerm ||
+            redeemFilter !== 'ALL' ||
+            waInviteFilter !== 'ALL' ||
+            firstSeenFilter !== 'ALL' ||
+            badgeTierFilter !== 'ALL' ||
+            milestoneFilter !== 'ALL' ||
+            onlyNewFilter) && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setRedeemFilter('ALL');
+                setWaInviteFilter('ALL');
+                setFirstSeenFilter('ALL');
+                setBadgeTierFilter('ALL');
+                setMilestoneFilter('ALL');
+                setOnlyNewFilter(false);
+              }}
+              className="text-xs text-blue-400 font-medium hover:underline ml-auto"
+            >
+              Reset Semua Filter
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Data Table */}
-      <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950/40">
-        <table className="w-full text-left text-xs min-w-[700px]">
-          <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-800">
+      {/* Main Table */}
+      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+        <table className="w-full text-left text-xs text-slate-300">
+          <thead className="bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-800 select-none">
             <tr>
               <th className="py-3 px-3 w-10 text-center">No</th>
-              <th className="py-3 px-3">Peserta & WA Link</th>
-              <th className="py-3 px-3 text-center">Status Redeem</th>
-              <th className="py-3 px-3 text-center">Milestone Peserta</th>
-              <th className="py-3 px-3 text-center">WA Invited</th>
-              <th className="py-3 px-3 text-center">Skill</th>
-              <th className="py-3 px-3 text-center">Arcade</th>
-              <th className="py-3 px-3 text-center">Total</th>
+
+              {/* Sortable: Peserta & Contact */}
+              <th
+                onClick={() => handleSort('name')}
+                className="py-3 px-3 cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span>Peserta & WA</span>
+                  {renderSortIcon('name')}
+                </div>
+              </th>
+
+              {/* Sortable: Status Redeem */}
+              <th
+                onClick={() => handleSort('access_code_status')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Status Redeem</span>
+                  {renderSortIcon('access_code_status')}
+                </div>
+              </th>
+
+              {/* Sortable: Milestone */}
+              <th
+                onClick={() => handleSort('calculated_milestone')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Milestone</span>
+                  {renderSortIcon('calculated_milestone')}
+                </div>
+              </th>
+
+              {/* Sortable: WA Invited */}
+              <th
+                onClick={() => handleSort('wa_invited')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>WA Invited</span>
+                  {renderSortIcon('wa_invited')}
+                </div>
+              </th>
+
+              {/* Sortable: Skill */}
+              <th
+                onClick={() => handleSort('skill_badges_count')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Skill</span>
+                  {renderSortIcon('skill_badges_count')}
+                </div>
+              </th>
+
+              {/* Sortable: Arcade */}
+              <th
+                onClick={() => handleSort('arcade_games_count')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Arcade</span>
+                  {renderSortIcon('arcade_games_count')}
+                </div>
+              </th>
+
+              {/* Sortable: Total Combined */}
+              <th
+                onClick={() => handleSort('total_combined')}
+                className="py-3 px-3 text-center cursor-pointer hover:text-slate-100 transition-colors group"
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <span>Total Point</span>
+                  {renderSortIcon('total_combined')}
+                </div>
+              </th>
+
+              {/* Catatan */}
               <th className="py-3 px-3">Catatan</th>
+
+              {/* Aksi */}
               <th className="py-3 px-3 text-center">Aksi</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-slate-800/60">
             {paginatedParticipants.length === 0 ? (
               <tr>
@@ -380,63 +663,60 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               </tr>
             ) : (
               paginatedParticipants.map((p, idx) => {
-                const isNewParticipant = p.first_seen_date === selectedSnapshotDate;
-                const isRedeemed = p.access_code_status === 'Sudah Redeem';
                 const totalCombined = (p.skill_badges_count || 0) + (p.arcade_games_count || 0);
                 const rowNum = (currentPage - 1) * pageSize + idx + 1;
 
                 return (
                   <tr
-                    key={`${p.project_id}_${p.email}`}
+                    key={`${p.email}-${idx}`}
                     onClick={() => onOpenDetail(p)}
-                    className="hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                    className="hover:bg-slate-900/80 transition-colors cursor-pointer group"
                   >
                     {/* Index */}
-                    <td className="py-3 px-3 text-center text-slate-500 font-medium">{rowNum}</td>
+                    <td className="py-3 px-3 text-center font-mono text-slate-500 text-[11px]">
+                      {rowNum}
+                    </td>
 
-                    {/* Participant Info & Phone Link */}
+                    {/* Participant Details */}
                     <td className="py-3 px-3">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-100 text-sm group-hover:text-blue-400 transition-colors">
-                            {p.name}
-                          </span>
-                          {isNewParticipant && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-black bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 flex items-center gap-0.5">
-                              <Sparkles className="w-2.5 h-2.5 text-amber-400" /> NEW
+                      <div>
+                        <div className="font-bold text-slate-100 group-hover:text-blue-400 transition-colors flex items-center gap-1.5">
+                          <span>{p.name}</span>
+                          {p.first_seen_date === selectedSnapshotDate && (
+                            <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 text-[9px] rounded font-bold border border-blue-500/30">
+                              Baru
                             </span>
                           )}
                         </div>
-                        <span className="text-slate-400 text-[11px] font-mono">{p.email}</span>
-
-                        {/* Direct WhatsApp link requirement */}
-                        {p.phone ? (
-                          <a
-                            href={getWaDirectUrl(p.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-mono text-[11px] mt-0.5 hover:underline"
-                            title="Buka Aplikasi WhatsApp (https://wa.me/)"
-                          >
-                            <span>{p.phone}</span>
-                            <ExternalLink className="w-2.5 h-2.5 text-emerald-400" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-600 text-[11px]">-</span>
-                        )}
+                        <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+                          <span>{maskEmail(p.email, hideSensitive)}</span>
+                          {p.phone && (
+                            <a
+                              href={getWaDirectUrl(p.phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-emerald-400 hover:underline flex items-center gap-0.5"
+                              title="Buka WA Direct"
+                            >
+                              • {maskPhone(p.phone, hideSensitive)}
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </td>
 
-                    {/* Redeem Status */}
+                    {/* Access Code Status */}
                     <td className="py-3 px-3 text-center">
-                      {isRedeemed ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          <CheckCircle className="w-3 h-3 text-emerald-400" /> Redeem
+                      {p.access_code_status === 'Sudah Redeem' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <CheckCircle className="w-3 h-3 text-emerald-400" />
+                          Sudah Redeem
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                          <XCircle className="w-3 h-3 text-rose-400" /> Belum
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          Belum Redeem
                         </span>
                       )}
                     </td>
@@ -444,7 +724,9 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                     {/* Milestone Peserta & Snapshot Date */}
                     <td className="py-3 px-3 text-center">
                       {(() => {
-                        const highest = p.calculated_milestone || calculateHighestMilestone(p.arcade_games_count, p.skill_badges_count);
+                        const highest =
+                          p.calculated_milestone ||
+                          calculateHighestMilestone(p.arcade_games_count, p.skill_badges_count);
                         const dateMap: Record<string, string | undefined> = {
                           'Ultimate Milestone': p.ultimate_milestone_date,
                           'Milestone 3': p.milestone_3_date,
@@ -460,7 +742,10 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                                 🏆 Ultimate
                               </span>
                               {achievedDate && (
-                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                <span
+                                  className="text-[9px] text-slate-400 font-mono mt-0.5"
+                                  title={`Dicapai pada snapshot ${achievedDate}`}
+                                >
                                   {achievedDate}
                                 </span>
                               )}
@@ -474,7 +759,10 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                                 🥇 Milestone 3
                               </span>
                               {achievedDate && (
-                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                <span
+                                  className="text-[9px] text-slate-400 font-mono mt-0.5"
+                                  title={`Dicapai pada snapshot ${achievedDate}`}
+                                >
                                   {achievedDate}
                                 </span>
                               )}
@@ -488,7 +776,10 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                                 🥈 Milestone 2
                               </span>
                               {achievedDate && (
-                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                <span
+                                  className="text-[9px] text-slate-400 font-mono mt-0.5"
+                                  title={`Dicapai pada snapshot ${achievedDate}`}
+                                >
                                   {achievedDate}
                                 </span>
                               )}
@@ -502,18 +793,17 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                                 🥉 Milestone 1
                               </span>
                               {achievedDate && (
-                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                <span
+                                  className="text-[9px] text-slate-400 font-mono mt-0.5"
+                                  title={`Dicapai pada snapshot ${achievedDate}`}
+                                >
                                   {achievedDate}
                                 </span>
                               )}
                             </div>
                           );
                         }
-                        return (
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            Belum
-                          </span>
-                        );
+                        return <span className="text-[10px] text-slate-500 font-mono">Belum</span>;
                       })()}
                     </td>
 
@@ -567,7 +857,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                         <button
                           onClick={(e) => handleStartEditNotes(p, e)}
                           title="Edit Catatan"
-                          className="text-slate-500 hover:text-blue-400 p-1 rounded hover:bg-slate-800 shrink-0"
+                          className="text-slate-500 hover:text-blue-400 p-1 rounded hover:bg-slate-800 shrink-0 cursor-pointer"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -592,7 +882,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                         <button
                           onClick={() => onOpenDetail(p)}
                           title="Lihat Detail Profil"
-                          className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                          className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </button>
@@ -616,23 +906,21 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               setPageSize(Number(e.target.value));
               setCurrentPage(1);
             }}
-            className="py-1 px-2 rounded-lg border border-slate-800 text-xs bg-slate-950 text-slate-200 focus:outline-none"
+            className="py-1 px-2 rounded-lg border border-slate-800 text-xs bg-slate-950 text-slate-200 focus:outline-none cursor-pointer"
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <span>
-            (Total {filteredParticipants.length} peserta)
-          </span>
+          <span>(Total {filteredParticipants.length} peserta)</span>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            className="p-1.5 rounded-lg border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
+            className="p-1.5 rounded-lg border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -642,7 +930,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
           <button
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-            className="p-1.5 rounded-lg border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
+            className="p-1.5 rounded-lg border border-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800 cursor-pointer"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -658,7 +946,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               Edit Catatan Fasilitator
             </h3>
             <p className="text-xs text-slate-400">
-              Catatan untuk <strong className="text-slate-200">{editingParticipant.name || editingParticipant.email}</strong> ({editingParticipant.email}):
+              Catatan untuk <strong className="text-slate-200">{editingParticipant.name || editingParticipant.email}</strong> ({maskEmail(editingParticipant.email, hideSensitive)}):
             </p>
 
             <textarea
@@ -672,13 +960,13 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setEditingParticipant(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-300 rounded-xl border border-slate-800 hover:bg-slate-800"
+                className="px-4 py-2 text-xs font-semibold text-slate-300 rounded-xl border border-slate-800 hover:bg-slate-800 cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={handleSaveNotes}
-                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-500 shadow-md shadow-blue-500/20"
+                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-500 shadow-md shadow-blue-500/20 cursor-pointer"
               >
                 Simpan Catatan
               </button>

@@ -44,6 +44,7 @@ export default function App() {
   const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
 
   const [selectedParticipantForDetail, setSelectedParticipantForDetail] = useState<ParticipantRecord | null>(null);
+  const [hideSensitive, setHideSensitive] = useState<boolean>(false);
 
   // Success Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -289,8 +290,11 @@ export default function App() {
             {activeTab === 'participants' && (
               <ParticipantTable
                 participants={rawParticipants}
+                snapshots={snapshots}
                 allFirstSeenDates={allFirstSeenDates}
                 selectedSnapshotDate={selectedSnapshotDate}
+                hideSensitive={hideSensitive}
+                onToggleHideSensitive={() => setHideSensitive((prev) => !prev)}
                 onParticipantUpdated={() => {
                   // IndexedDB live query automatically updates
                 }}
@@ -369,6 +373,7 @@ export default function App() {
         participant={selectedParticipantForDetail}
         onClose={() => setSelectedParticipantForDetail(null)}
         onUpdated={() => showToast('Catatan peserta berhasil diperbarui!')}
+        hideSensitive={hideSensitive}
       />
 
       <CreateProjectModal
