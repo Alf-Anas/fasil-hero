@@ -138,18 +138,31 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
         {/* Profiles & Public Links */}
         <div className="space-y-2">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Tautan Profil Google</h3>
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Tautan & Status Profil Google</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {participant.skills_profile_url ? (
-              <a
-                href={participant.skills_profile_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl border border-slate-800 hover:border-blue-500 bg-slate-950 hover:bg-slate-800/60 transition-all text-xs text-slate-200 font-semibold group"
-              >
-                <span className="truncate">Profil Google Skills Boost</span>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-blue-400 shrink-0 ml-2" />
-              </a>
+              <div className="p-3 rounded-xl border border-slate-800 bg-slate-950 flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 truncate">Profil Google Skills Boost</span>
+                  <a
+                    href={participant.skills_profile_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded bg-slate-800 text-slate-300 hover:text-blue-400 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    participant.skills_profile_status === 'All Good'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {participant.skills_profile_status || 'All Good'}
+                  </span>
+                </div>
+              </div>
             ) : (
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950 text-xs text-slate-500">
                 Profil Skills Boost tidak tersedia
@@ -157,20 +170,58 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             )}
 
             {participant.developer_profile_url ? (
-              <a
-                href={participant.developer_profile_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl border border-slate-800 hover:border-blue-500 bg-slate-950 hover:bg-slate-800/60 transition-all text-xs text-slate-200 font-semibold group"
-              >
-                <span className="truncate">Profil Google Developer</span>
-                <ExternalLink className="w-4 h-4 text-slate-500 group-hover:text-blue-400 shrink-0 ml-2" />
-              </a>
+              <div className="p-3 rounded-xl border border-slate-800 bg-slate-950 flex flex-col justify-between gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 truncate">Profil Google Developer</span>
+                  <a
+                    href={participant.developer_profile_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded bg-slate-800 text-slate-300 hover:text-blue-400 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    participant.developer_profile_status === 'All Good'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {participant.developer_profile_status || 'All Good'}
+                  </span>
+                </div>
+              </div>
             ) : (
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950 text-xs text-slate-500">
                 Profil Developer tidak tersedia
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Additional Arcade Status Badges */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Status & Program Arcade</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Lencana GEAR</span>
+              <span className="text-xs font-bold text-[#fbbc04] line-clamp-1" title={participant.gear_digital_badge || 'No Badge'}>
+                {participant.gear_digital_badge || 'No Badge'}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Milestone Diraih</span>
+              <span className="text-xs font-bold text-slate-200">
+                {participant.milestone_reached || 'None'}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase block">Verifikasi AI Agent</span>
+              <span className="text-xs font-bold text-slate-300">
+                {participant.ai_agent_verification_status || 'Not yet submitted'}
+              </span>
+            </div>
           </div>
         </div>
 
