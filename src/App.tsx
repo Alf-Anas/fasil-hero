@@ -6,31 +6,25 @@ import { seedSampleData } from './utils/sampleData';
 import { exportParticipantsToExcel } from './utils/excelParser';
 
 import { Navbar } from './components/Navbar';
-import { MilestoneCards } from './components/MilestoneCards';
+import { TabNavigation, TabType } from './components/TabNavigation';
+import { OverviewTab } from './components/OverviewTab';
+import { MilestoneCards, FACILITATOR_MILESTONES } from './components/MilestoneCards';
 import { ParticipantTable } from './components/ParticipantTable';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
+import { WelcomeScreen } from './components/WelcomeScreen';
+
 import { UploadModal } from './components/UploadModal';
 import { AboutModal } from './components/AboutModal';
 import { ProjectModal } from './components/ProjectModal';
 import { ParticipantDetailModal } from './components/ParticipantDetailModal';
 
-import {
-  Sparkles,
-  Layers,
-  Award,
-  Users,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  Plus,
-  FileSpreadsheet,
-  Zap,
-} from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 export default function App() {
   const [currentProjectId, setCurrentProjectId] = useState<string>(DEFAULT_PROJECT_ID);
   const [selectedSnapshotDate, setSelectedSnapshotDate] = useState<string>('');
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
@@ -70,12 +64,10 @@ export default function App() {
       [currentProjectId]
     ) || [];
 
-  // Initialize DB & Seed Demo Data if empty
+  // Initialize DB (ensure default project exists, DO NOT auto-seed sample data)
   const initApp = useCallback(async () => {
     setIsInitializing(true);
     await ensureDefaultProjectExists();
-    await seedSampleData(false); // seed if empty
-
     setIsInitializing(false);
   }, []);
 
@@ -112,6 +104,11 @@ export default function App() {
     ? activeSnapshotRecord.total_participants
     : rawParticipants.length;
 
+  const combinedPoints = totalSkillBadges + totalArcadeGames;
+  const currentTierObj =
+    [...FACILITATOR_MILESTONES].reverse().find((m) => combinedPoints >= m.targetCombined) ||
+    FACILITATOR_MILESTONES[0];
+
   // Unique first_seen_dates for filtering
   const allFirstSeenDates = Array.from(
     new Set(rawParticipants.map((p) => p.first_seen_date).filter(Boolean))
@@ -119,10 +116,8 @@ export default function App() {
 
   // Handle Load Sample Demo Data
   const handleLoadSampleData = async () => {
-    if (confirm('Apakah Anda ingin memuat ulang Data Demo Google Arcade Facilitator 2026?')) {
-      await seedSampleData(true);
-      showToast('Data demo Google Arcade 2026 berhasil dimuat!');
-    }
+    await seedSampleData(true);
+    showToast('Data demo Google Arcade 2026 berhasil dimuat!');
   };
 
   // Handle Export Filtered / All
@@ -144,18 +139,20 @@ export default function App() {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/30 animate-pulse mb-4">
           F
         </div>
-        <h2 className="text-base font-extrabold text-slate-800">Menyiapkan FasilHero DB...</h2>
-        <p className="text-xs text-slate-500 mt-1">Mengagregasi data peserta & IndexedDB lokal</p>
+        <h2 className="text-base font-extrabold text-slate-100">Menyiapkan FasilHero DB...</h2>
+        <p className="text-xs text-slate-400 mt-1">Mengagregasi data peserta & IndexedDB lokal</p>
       </div>
     );
   }
 
+  const isDataEmpty = snapshots.length === 0 && rawParticipants.length === 0;
+
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-800 flex flex-col font-sans antialiased">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-semibold animate-bounce border border-slate-700">
@@ -177,52 +174,90 @@ export default function App() {
         onOpenProjectsModal={() => setIsProjectsOpen(true)}
         onExportAll={handleExportAll}
         onLoadSampleData={handleLoadSampleData}
+        showToast={showToast}
       />
 
+      {/* Tab Navigation (Displayed when data exists) */}
+      {!isDataEmpty && (
+        <TabNavigation
+          activeTab={activeTab}
+          onTabChange={(tab) => setActiveTab(tab)}
+          participantCount={rawParticipants.length}
+          currentTierName={currentTierObj.title}
+          snapshotCount={snapshots.length}
+        />
+      )}
+
       {/* Main Content Area */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8 flex-1">
-        {/* Section 1: Milestone Progress Cards */}
-        <section>
-          <MilestoneCards
-            totalSkillBadges={totalSkillBadges}
-            totalArcadeGames={totalArcadeGames}
-            totalParticipants={totalParticipantsCount}
+      <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 flex-1">
+        {isDataEmpty ? (
+          /* Empty State Welcome Screen when project has no data */
+          <WelcomeScreen
+            currentProject={currentProject}
+            onOpenUpload={() => setIsUploadOpen(true)}
+            onOpenProjectsModal={() => setIsProjectsOpen(true)}
+            onLoadSampleData={handleLoadSampleData}
+            onSelectProject={(id) => setCurrentProjectId(id)}
+            showToast={showToast}
           />
-        </section>
+        ) : (
+          /* Tab Contents */
+          <div className="space-y-6">
+            {activeTab === 'overview' && (
+              <OverviewTab
+                participants={rawParticipants}
+                snapshots={snapshots}
+                selectedSnapshotDate={selectedSnapshotDate}
+                totalSkillBadges={totalSkillBadges}
+                totalArcadeGames={totalArcadeGames}
+                totalParticipants={totalParticipantsCount}
+                onOpenUpload={() => setIsUploadOpen(true)}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+                onOpenDetail={(participant) => setSelectedParticipantForDetail(participant)}
+              />
+            )}
 
-        {/* Section 2: Recharts Analytics Charts */}
-        <section>
-          <AnalyticsCharts snapshots={snapshots} participants={rawParticipants} />
-        </section>
+            {activeTab === 'participants' && (
+              <ParticipantTable
+                participants={rawParticipants}
+                allFirstSeenDates={allFirstSeenDates}
+                selectedSnapshotDate={selectedSnapshotDate}
+                onParticipantUpdated={() => {
+                  // IndexedDB live query automatically updates
+                }}
+                onOpenDetail={(participant) => setSelectedParticipantForDetail(participant)}
+                onExportFiltered={handleExportFiltered}
+              />
+            )}
 
-        {/* Section 3: Interactive Participant Table */}
-        <section>
-          <ParticipantTable
-            participants={rawParticipants}
-            allFirstSeenDates={allFirstSeenDates}
-            selectedSnapshotDate={selectedSnapshotDate}
-            onParticipantUpdated={() => {
-              // IndexedDB automatically triggers Dexie useLiveQuery re-render
-            }}
-            onOpenDetail={(participant) => setSelectedParticipantForDetail(participant)}
-            onExportFiltered={handleExportFiltered}
-          />
-        </section>
+            {activeTab === 'milestones' && (
+              <MilestoneCards
+                totalSkillBadges={totalSkillBadges}
+                totalArcadeGames={totalArcadeGames}
+                totalParticipants={totalParticipantsCount}
+              />
+            )}
+
+            {activeTab === 'analytics' && (
+              <AnalyticsCharts snapshots={snapshots} participants={rawParticipants} />
+            )}
+          </div>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500">
+      <footer className="bg-slate-900 border-t border-slate-800 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="font-medium">
-            <strong>FasilHero</strong> — Google Arcade Facilitator 2026 Tracking Dashboard (IndexedDB Client-Side)
+          <p className="font-medium text-slate-300">
+            © 2026 | <a href="https://geoit.dev/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-bold underline underline-offset-2 transition-colors">GeoIT Developer</a>
           </p>
           <div className="flex items-center gap-4 text-slate-400 text-[11px]">
-            <button onClick={() => setIsAboutOpen(true)} className="hover:text-blue-600 transition-colors">
+            <button onClick={() => setIsAboutOpen(true)} className="hover:text-blue-400 transition-colors cursor-pointer">
               Panduan Facilitator
             </button>
             <span>•</span>
-            <button onClick={handleLoadSampleData} className="hover:text-blue-600 transition-colors">
-              Reset Data Demo
+            <button onClick={handleLoadSampleData} className="hover:text-blue-400 transition-colors cursor-pointer">
+              Muat Data Demo
             </button>
           </div>
         </div>
@@ -235,6 +270,7 @@ export default function App() {
         onClose={() => setIsUploadOpen(false)}
         onSuccess={(snapshotDate, summary) => {
           setSelectedSnapshotDate(snapshotDate);
+          setActiveTab('overview');
           showToast(
             `Snapshot ${snapshotDate} berhasil diupload! (${summary.newParticipantsCount} Peserta Baru)`
           );

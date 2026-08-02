@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FolderKanban, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
+import { X, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { ProjectRecord } from '../types';
 import { db } from '../db';
 
@@ -78,24 +78,24 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl border border-slate-200 relative my-8 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-slate-900 rounded-3xl p-5 sm:p-6 max-w-xl w-full shadow-2xl border border-slate-800 relative my-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-100 text-blue-600 rounded-2xl">
+            <div className="p-2.5 bg-slate-800 text-blue-400 rounded-2xl border border-slate-700">
               <FolderKanban className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-800">Kelola Project Facilitator</h2>
-              <p className="text-xs text-slate-500">
+              <h2 className="text-lg font-black text-white">Kelola Project Facilitator</h2>
+              <p className="text-xs text-slate-400">
                 Buat project terpisah untuk batch, wilayah, atau musim Google Arcade.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -112,8 +112,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                   key={p.id}
                   className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
                     isSelected
-                      ? 'bg-blue-50/80 border-blue-400 shadow-xs'
-                      : 'bg-white border-slate-200 hover:bg-slate-50'
+                      ? 'bg-blue-500/10 border-blue-500/40 shadow-xs'
+                      : 'bg-slate-950 border-slate-800 hover:bg-slate-800/40'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                       }}
                       className="text-left"
                     >
-                      <p className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                      <p className="text-xs font-bold text-white flex items-center gap-2">
                         {p.name}
                         {isSelected && (
                           <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-semibold">
@@ -132,7 +132,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                           </span>
                         )}
                       </p>
-                      <p className="text-[11px] text-slate-500">{p.description}</p>
+                      <p className="text-[11px] text-slate-400">{p.description}</p>
                     </button>
                   </div>
 
@@ -143,7 +143,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                           onSelectProject(p.id);
                           onClose();
                         }}
-                        className="px-3 py-1.5 text-xs font-bold text-blue-600 bg-white border border-blue-200 rounded-xl hover:bg-blue-50"
+                        className="px-3 py-1.5 text-xs font-bold text-blue-400 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 cursor-pointer"
                       >
                         Pilih
                       </button>
@@ -153,7 +153,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                       <button
                         onClick={() => handleDeleteProject(p.id, p.name)}
                         title="Hapus Project"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                        className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -166,7 +166,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         </div>
 
         {/* Add New Project Form */}
-        <form onSubmit={handleCreateProject} className="space-y-3 pt-3 border-t border-slate-100">
+        <form onSubmit={handleCreateProject} className="space-y-3 pt-3 border-t border-slate-800">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
             Tambah Project Baru
           </h3>
@@ -177,7 +177,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="Nama Project (Contoh: Arcade Season 2 Jawa Barat)"
-              className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full p-3 text-xs bg-slate-950 text-slate-100 border border-slate-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
               required
             />
             <input
@@ -185,7 +185,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
               value={newProjectDesc}
               onChange={(e) => setNewProjectDesc(e.target.value)}
               placeholder="Deskripsi singkat project..."
-              className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full p-3 text-xs bg-slate-950 text-slate-100 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
           </div>
 
@@ -193,7 +193,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             <button
               type="submit"
               disabled={isCreating || !newProjectName.trim()}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-extrabold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-extrabold text-white bg-blue-600 rounded-xl hover:bg-blue-500 shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               {isCreating ? 'Membuat...' : 'Buat Project'}
