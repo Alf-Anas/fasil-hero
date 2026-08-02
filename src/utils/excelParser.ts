@@ -177,11 +177,160 @@ export async function processAndSaveSnapshot(
 
   const snapshotId = await db.snapshots.add(snapshotRecord);
 
+  // Recalculate whole project data to ensure chronological ordering and clean state
+  await recalculateProjectData(projectId);
+
   return {
-    snapshotId,
+    snapshotId: typeof snapshotId === 'number' ? snapshotId : 0,
     newParticipantsCount,
     totalCombined: totalSkillBadges + totalArcadeGames,
   };
+}
+
+/**
+ * Recalculates all participant records and snapshot stats for a project
+ * based on remaining snapshots ordered chronologically.
+ * Preserves custom/manual participant attributes (notes, wa_invited, custom phone).
+ */
+export async function recalculateProjectData(projectId: string): Promise<{
+  participantsCount: number;
+  snapshotsCount: number;
+}> {
+  // 1. Map existing participant manual attributes before clearing
+  const existingManualMap = new Map<string, { wa_invited: boolean; notes: string; phone: string }>();
+  const existingParticipants = await db.participants.where('project_id').equals(projectId).toArray();
+  existingParticipants.forEach((p) => {
+    existingManualMap.set(p.email.toLowerCase().trim(), {
+      wa_invited: p.wa_invited,
+      notes: p.notes,
+      phone: p.phone,
+    });
+  });
+
+  // 2. Fetch all remaining snapshots for this project
+  const snapshots = await db.snapshots
+    .where('project_id')
+    .equals(projectId)
+    .toArray();
+
+  // Sort snapshots chronologically (ascending: earliest first)
+  snapshots.sort((a, b) => {
+    const dateDiff = a.snapshot_date.localeCompare(b.snapshot_date);
+    if (dateDiff !== 0) return dateDiff;
+    return (a.id || 0) - (b.id || 0);
+  });
+
+  if (snapshots.length === 0) {
+    // Delete all participants for this project if no snapshots remain
+    await db.participants.where('project_id').equals(projectId).delete();
+    return { participantsCount: 0, snapshotsCount: 0 };
+  }
+
+  // 3. Process snapshots chronologically to build updated participant records
+  const recalculatedParticipantsMap = new Map<string, ParticipantRecord>();
+
+  for (const snap of snapshots) {
+    let rows: RawParticipantRow[] = [];
+    try {
+      rows = JSON.parse(snap.raw_data_json || '[]');
+    } catch (e) {
+      rows = [];
+    }
+
+    let snapSkillBadges = 0;
+    let snapArcadeGames = 0;
+    let snapParticipantCount = 0;
+
+    for (const row of rows) {
+      const rawEmail = row['Email Peserta'] || '';
+      if (!rawEmail) continue;
+
+      const email = rawEmail.toLowerCase().trim();
+      snapParticipantCount++;
+
+      const skillBadges = parseNumberCell(row['Jumlah Lencana Keahlian yang diselesaikan']);
+      const arcadeGames = parseNumberCell(row['Jumlah Arcade Game yang diselesaikan']);
+
+      snapSkillBadges += skillBadges;
+      snapArcadeGames += arcadeGames;
+
+      const existingInRecalc = recalculatedParticipantsMap.get(email);
+      const manualInfo = existingManualMap.get(email);
+
+      // first_seen_date is the snapshot_date of the earliest snapshot where this user appears
+      const firstSeenDate = existingInRecalc
+        ? existingInRecalc.first_seen_date
+        : snap.snapshot_date;
+
+      const waInvited = existingInRecalc
+        ? existingInRecalc.wa_invited
+        : manualInfo
+        ? manualInfo.wa_invited
+        : false;
+
+      const notes = existingInRecalc
+        ? existingInRecalc.notes
+        : manualInfo
+        ? manualInfo.notes
+        : '';
+
+      const phone = row['Nomor HP Peserta'] ||
+        (existingInRecalc ? existingInRecalc.phone : manualInfo ? manualInfo.phone : '');
+
+      const updatedRecord: ParticipantRecord = {
+        email,
+        project_id: projectId,
+        name: row['Nama Peserta'] || email,
+        phone,
+        skills_profile_url: row['URL Profil Google Skills'] || '',
+        skills_profile_status: row['Status Google Skills URL Profil'] || 'Valid',
+        developer_profile_url: row['URL Profil Google Developer'] || '',
+        developer_profile_status: row['Status URL Profil Google Developer'] || 'Valid',
+        access_code_status: normalizeAccessCodeStatus(row['Status Redeem Kode Akses']),
+        milestone_reached: row['Milestone yang diraih'] || '',
+        bonus_milestone_reached: row['Bonus Milestone yang diraih'] || '',
+        ai_agent_verification_status: row['Status Verifikasi AI Agent'] || '',
+        gear_digital_badge: row['Lencana Digital GEAR yang diraih'] || '',
+        skill_badges_count: skillBadges,
+        skill_badges_names: row['Nama Lencana Keahlian yang diselesaikan'] || '',
+        arcade_games_count: arcadeGames,
+        arcade_games_names: row['Nama Arcade Game yang diselesaikan'] || '',
+        wa_invited: waInvited,
+        notes: notes,
+        first_seen_date: firstSeenDate,
+        last_updated_date: snap.snapshot_date,
+      };
+
+      recalculatedParticipantsMap.set(email, updatedRecord);
+    }
+
+    // Update snapshot record stats
+    snap.total_participants = snapParticipantCount;
+    snap.total_skill_badges = snapSkillBadges;
+    snap.total_arcade_games = snapArcadeGames;
+    snap.total_combined = snapSkillBadges + snapArcadeGames;
+    await db.snapshots.put(snap);
+  }
+
+  // 4. Wipe current participant records for this project and put recalculated ones
+  await db.participants.where('project_id').equals(projectId).delete();
+  const newParticipantRecords = Array.from(recalculatedParticipantsMap.values());
+  if (newParticipantRecords.length > 0) {
+    await db.participants.bulkPut(newParticipantRecords);
+  }
+
+  return {
+    participantsCount: newParticipantRecords.length,
+    snapshotsCount: snapshots.length,
+  };
+}
+
+/**
+ * Deletes a snapshot by ID and triggers automatic recalculation of project participant data
+ */
+export async function deleteSnapshot(snapshotId: number, projectId: string) {
+  await db.snapshots.delete(snapshotId);
+  return await recalculateProjectData(projectId);
 }
 
 /**

@@ -246,6 +246,7 @@ export default function App() {
             currentProject={currentProject}
             participantCount={rawParticipants.length}
             snapshotCount={snapshots.length}
+            snapshots={snapshots}
             onOpenUploadModal={() => setIsUploadOpen(true)}
             onExportMasterExcel={handleExportAll}
             onOpenDeleteModal={(p) => setProjectToDelete(p)}

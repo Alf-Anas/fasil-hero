@@ -26,7 +26,7 @@ interface OverviewTabProps {
   totalParticipants: number;
   onOpenUpload: () => void;
   onOpenHelp?: () => void;
-  onNavigateTab: (tab: 'overview' | 'participants' | 'milestones' | 'analytics') => void;
+  onNavigateTab: (tab: 'overview' | 'participants' | 'milestones' | 'analytics' | 'settings') => void;
   onOpenDetail: (participant: ParticipantRecord) => void;
 }
 
@@ -86,6 +86,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               Snapshot Terpilih
             </span>
             <span className="text-xs font-mono font-bold text-slate-300">{selectedSnapshotDate || 'Terbaru'}</span>
+            <button
+              onClick={() => onNavigateTab('settings')}
+              className="text-[11px] text-[#fbbc04] hover:underline font-bold ml-1 cursor-pointer"
+              title="Kelola & Hapus Snapshot"
+            >
+              (Kelola / Hapus)
+            </button>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">
             Ringkasan Performa Facilitator Arcade 2026
