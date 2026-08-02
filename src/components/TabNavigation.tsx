@@ -68,7 +68,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
                 onClick={() => onTabChange(tab.id)}
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                    ? 'bg-[#fbbc04] text-slate-950 shadow-md shadow-[#fbbc04]/20 font-black'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
               >
@@ -78,7 +78,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
                   <span
                     className={`ml-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                       isActive
-                        ? 'bg-blue-800/80 text-blue-100'
+                        ? 'bg-slate-950/20 text-slate-950'
                         : 'bg-slate-800 text-slate-300 border border-slate-700'
                     }`}
                   >

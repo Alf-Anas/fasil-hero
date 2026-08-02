@@ -305,17 +305,17 @@ export const SAMPLE_PARTICIPANTS_DATA: Array<{
 /**
  * Seed sample data into Dexie IndexedDB if database is empty
  */
-export async function seedSampleData(force = false): Promise<void> {
+export async function seedSampleData(force = false, targetProjectId: string = DEFAULT_PROJECT_ID): Promise<void> {
   await ensureDefaultProjectExists();
 
-  const existingSnapshots = await db.snapshots.where('project_id').equals(DEFAULT_PROJECT_ID).count();
+  const existingSnapshots = await db.snapshots.where('project_id').equals(targetProjectId).count();
   if (existingSnapshots > 0 && !force) {
     return;
   }
 
   if (force) {
-    await db.snapshots.where('project_id').equals(DEFAULT_PROJECT_ID).delete();
-    await db.participants.where('project_id').equals(DEFAULT_PROJECT_ID).delete();
+    await db.snapshots.where('project_id').equals(targetProjectId).delete();
+    await db.participants.where('project_id').equals(targetProjectId).delete();
   }
 
   const snapshotDates = ['2026-07-20', '2026-07-27', '2026-08-02'];
@@ -354,7 +354,7 @@ export async function seedSampleData(force = false): Promise<void> {
         // Update participant record in db
         await db.participants.put({
           email: p.email,
-          project_id: DEFAULT_PROJECT_ID,
+          project_id: targetProjectId,
           name: p.name,
           phone: p.phone,
           skills_profile_url: p.skills_url,
@@ -379,7 +379,7 @@ export async function seedSampleData(force = false): Promise<void> {
     }
 
     const snapshotRecord: SnapshotRecord = {
-      project_id: DEFAULT_PROJECT_ID,
+      project_id: targetProjectId,
       snapshot_date: sDate,
       created_at: new Date(sDate + 'T10:00:00Z').toISOString(),
       total_participants: rowsForSnapshot.length,

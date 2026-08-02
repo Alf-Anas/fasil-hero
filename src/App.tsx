@@ -12,10 +12,11 @@ import { MilestoneCards, FACILITATOR_MILESTONES } from './components/MilestoneCa
 import { ParticipantTable } from './components/ParticipantTable';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { ProjectListScreen } from './components/ProjectListScreen';
 
 import { UploadModal } from './components/UploadModal';
 import { AboutModal } from './components/AboutModal';
-import { ProjectModal } from './components/ProjectModal';
+import { HelpModal } from './components/HelpModal';
 import { ParticipantDetailModal } from './components/ParticipantDetailModal';
 
 import { Sparkles } from 'lucide-react';
@@ -26,10 +27,13 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
+  // Toggle Project List Manager Screen vs Main Dashboard
+  const [isProjectViewActive, setIsProjectViewActive] = useState<boolean>(false);
+
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
-  const [isProjectsOpen, setIsProjectsOpen] = useState<boolean>(false);
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [selectedParticipantForDetail, setSelectedParticipantForDetail] = useState<ParticipantRecord | null>(null);
 
   // Success Toast
@@ -114,12 +118,6 @@ export default function App() {
     new Set(rawParticipants.map((p) => p.first_seen_date).filter(Boolean))
   ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-  // Handle Load Sample Demo Data
-  const handleLoadSampleData = async () => {
-    await seedSampleData(true);
-    showToast('Data demo Google Arcade 2026 berhasil dimuat!');
-  };
-
   // Handle Export Filtered / All
   const handleExportFiltered = (filtered: ParticipantRecord[]) => {
     exportParticipantsToExcel(
@@ -140,7 +138,7 @@ export default function App() {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-blue-500/30 animate-pulse mb-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbc04] to-amber-600 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shadow-[#fbbc04]/30 animate-pulse mb-4">
           F
         </div>
         <h2 className="text-base font-extrabold text-slate-100">Menyiapkan FasilHero DB...</h2>
@@ -155,8 +153,8 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-semibold animate-bounce border border-slate-700">
-          <Sparkles className="w-4 h-4 text-amber-400" />
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-semibold animate-bounce border border-[#fbbc04]/40">
+          <Sparkles className="w-4 h-4 text-[#fbbc04]" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -167,18 +165,22 @@ export default function App() {
         projects={projects}
         snapshots={snapshots}
         selectedSnapshotDate={selectedSnapshotDate}
-        onSelectProject={(id) => setCurrentProjectId(id)}
+        isProjectViewActive={isProjectViewActive}
+        onToggleProjectView={() => setIsProjectViewActive(!isProjectViewActive)}
+        onSelectProject={(id) => {
+          setCurrentProjectId(id);
+          setIsProjectViewActive(false);
+        }}
         onSelectSnapshotDate={(date) => setSelectedSnapshotDate(date)}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenAbout={() => setIsAboutOpen(true)}
-        onOpenProjectsModal={() => setIsProjectsOpen(true)}
+        onOpenHelp={() => setIsHelpOpen(true)}
         onExportAll={handleExportAll}
-        onLoadSampleData={handleLoadSampleData}
         showToast={showToast}
       />
 
-      {/* Tab Navigation (Displayed when data exists) */}
-      {!isDataEmpty && (
+      {/* Tab Navigation (Displayed when in dashboard view and data exists) */}
+      {!isProjectViewActive && !isDataEmpty && (
         <TabNavigation
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab)}
@@ -190,13 +192,34 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 flex-1">
-        {isDataEmpty ? (
-          /* Empty State Welcome Screen when project has no data */
+        {isProjectViewActive ? (
+          /* Project List Screen View */
+          <ProjectListScreen
+            projects={projects}
+            currentProjectId={currentProjectId}
+            onSelectProject={(id) => {
+              setCurrentProjectId(id);
+              setIsProjectViewActive(false);
+            }}
+            onProjectCreated={(newId) => {
+              setCurrentProjectId(newId);
+              setIsProjectViewActive(false);
+            }}
+            onProjectDeleted={() => {
+              // Updated via live query
+            }}
+            showToast={showToast}
+          />
+        ) : isDataEmpty ? (
+          /* Empty State Welcome Screen when active project has no data */
           <WelcomeScreen
             currentProject={currentProject}
             onOpenUpload={() => setIsUploadOpen(true)}
-            onOpenProjectsModal={() => setIsProjectsOpen(true)}
-            onLoadSampleData={handleLoadSampleData}
+            onOpenProjectsModal={() => setIsProjectViewActive(true)}
+            onLoadSampleData={async () => {
+              await seedSampleData(true, currentProjectId);
+              showToast('Data demo Google Arcade 2026 berhasil dimuat!');
+            }}
             onSelectProject={(id) => setCurrentProjectId(id)}
             showToast={showToast}
           />
@@ -212,6 +235,7 @@ export default function App() {
                 totalArcadeGames={totalArcadeGames}
                 totalParticipants={totalParticipantsCount}
                 onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenHelp={() => setIsHelpOpen(true)}
                 onNavigateTab={(tab) => setActiveTab(tab)}
                 onOpenDetail={(participant) => setSelectedParticipantForDetail(participant)}
               />
@@ -245,19 +269,33 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Clean Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="font-medium text-slate-300">
-            © 2026 | <a href="https://geoit.dev/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 font-bold underline underline-offset-2 transition-colors">GeoIT Developer</a>
+            © 2026 |{' '}
+            <a
+              href="https://geoit.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#fbbc04] hover:underline font-bold underline-offset-2 transition-colors"
+            >
+              GeoIT Developer
+            </a>
           </p>
-          <div className="flex items-center gap-4 text-slate-400 text-[11px]">
-            <button onClick={() => setIsAboutOpen(true)} className="hover:text-blue-400 transition-colors cursor-pointer">
-              Panduan Facilitator
+          <div className="flex items-center gap-3 text-slate-400 text-[11px]">
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="hover:text-[#fbbc04] transition-colors cursor-pointer"
+            >
+              Bantuan Kendala
             </button>
             <span>•</span>
-            <button onClick={handleLoadSampleData} className="hover:text-blue-400 transition-colors cursor-pointer">
-              Muat Data Demo
+            <button
+              onClick={() => setIsProjectViewActive(true)}
+              className="hover:text-[#fbbc04] transition-colors cursor-pointer"
+            >
+              Kelola Project
             </button>
           </div>
         </div>
@@ -271,6 +309,7 @@ export default function App() {
         onSuccess={(snapshotDate, summary) => {
           setSelectedSnapshotDate(snapshotDate);
           setActiveTab('overview');
+          setIsProjectViewActive(false);
           showToast(
             `Snapshot ${snapshotDate} berhasil diupload! (${summary.newParticipantsCount} Peserta Baru)`
           );
@@ -279,15 +318,7 @@ export default function App() {
 
       <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
 
-      <ProjectModal
-        isOpen={isProjectsOpen}
-        projects={projects}
-        currentProjectId={currentProjectId}
-        onClose={() => setIsProjectsOpen(false)}
-        onSelectProject={(id) => setCurrentProjectId(id)}
-        onProjectCreated={() => showToast('Project baru berhasil dibuat!')}
-        onProjectDeleted={() => showToast('Project berhasil dihapus.')}
-      />
+      <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
 
       <ParticipantDetailModal
         participant={selectedParticipantForDetail}

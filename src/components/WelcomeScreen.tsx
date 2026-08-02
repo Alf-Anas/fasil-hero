@@ -3,13 +3,12 @@ import {
   Upload,
   FileJson,
   Sparkles,
-  Plus,
-  FolderKanban,
+  Layers,
   FileSpreadsheet,
   CheckCircle2,
   ShieldCheck,
 } from 'lucide-react';
-import { exportProjectToJson, importProjectFromJson } from '../utils/projectBackup';
+import { importProjectFromJson } from '../utils/projectBackup';
 import { ProjectRecord } from '../types';
 
 interface WelcomeScreenProps {
@@ -56,28 +55,30 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto my-6 sm:my-10 p-6 sm:p-10 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-8 animate-fadeIn">
+    <div className="max-w-4xl mx-auto my-6 sm:my-10 p-6 sm:p-10 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-8 animate-fadeIn relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-80 h-80 bg-[#fbbc04]/5 rounded-full blur-3xl pointer-events-none" />
+
       {/* Header Banner */}
-      <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-extrabold tracking-wide uppercase">
+      <div className="text-center space-y-3 relative z-10">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#fbbc04]/10 border border-[#fbbc04]/20 text-[#fbbc04] text-xs font-extrabold tracking-wide uppercase">
           <Sparkles className="w-3.5 h-3.5" /> Google Arcade Facilitator 2026
         </div>
 
         <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-          Selamat Datang di <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">FasilHero</span>
+          Selamat Datang di <span className="text-[#fbbc04]">FasilHero</span>
         </h1>
 
         <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Project <strong className="text-slate-200">"{currentProject?.name || 'Utama'}"</strong> saat ini belum memiliki data snapshot laporan. Silakan pilih metode untuk mulai mengelola data Facilitator Anda:
+          Project <strong className="text-white">"{currentProject?.name || 'Utama'}"</strong> saat ini belum memiliki data snapshot laporan. Silakan pilih metode untuk mulai mengelola data Facilitator Anda:
         </p>
       </div>
 
       {/* 3 Main Quick Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
         {/* Card 1: Upload CSV/XLSX */}
-        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 hover:border-blue-500/50 transition-all flex flex-col justify-between space-y-4 group">
+        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 hover:border-[#fbbc04]/50 transition-all flex flex-col justify-between space-y-4 group">
           <div className="space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+            <div className="w-12 h-12 rounded-2xl bg-[#fbbc04]/10 border border-[#fbbc04]/20 text-[#fbbc04] flex items-center justify-center group-hover:bg-[#fbbc04] group-hover:text-slate-950 transition-colors">
               <FileSpreadsheet className="w-6 h-6" />
             </div>
             <div>
@@ -90,9 +91,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
           <button
             onClick={onOpenUpload}
-            className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white font-extrabold text-xs hover:bg-blue-500 shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl bg-[#fbbc04] text-slate-950 font-black text-xs hover:bg-amber-400 shadow-md shadow-[#fbbc04]/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 stroke-[2.5]" />
             Upload File Laporan
           </button>
         </div>
@@ -100,77 +101,64 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         {/* Card 2: Import Backup JSON */}
         <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 hover:border-emerald-500/50 transition-all flex flex-col justify-between space-y-4 group">
           <div className="space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
               <FileJson className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-white">2. Import Project JSON</h3>
+              <h3 className="text-sm font-extrabold text-white">2. Import Backup JSON</h3>
               <p className="text-xs text-slate-400 mt-1 leading-normal">
-                Pulihkan project beserta seluruh snapshot & data pesertanya dari file backup JSON FasilHero.
+                Pulihkan data snapshot & peserta dari file ekspor backup JSON yang pernah dibuat sebelumnya.
               </p>
             </div>
           </div>
 
           <button
             onClick={handleImportJson}
-            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 border border-slate-700 text-emerald-400 font-extrabold text-xs hover:bg-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 text-slate-200 font-bold text-xs hover:bg-slate-700 border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <FileJson className="w-4 h-4 text-emerald-400" />
-            Pilih File Backup JSON
+            Import File Backup
           </button>
         </div>
 
         {/* Card 3: Load Demo Sample Data */}
         <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 hover:border-amber-500/50 transition-all flex flex-col justify-between space-y-4 group">
           <div className="space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-600/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-colors">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors">
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-white">3. Muat Data Demo</h3>
+              <h3 className="text-sm font-extrabold text-white">3. Muat Contoh Data Demo</h3>
               <p className="text-xs text-slate-400 mt-1 leading-normal">
-                Coba seluruh fitur FasilHero sekarang juga dengan 12 data peserta demo & 3 snapshot harian.
+                Uji coba fitur aplikasi langsung dengan 12 data peserta simulasi & 3 snapshot historis.
               </p>
             </div>
           </div>
 
           <button
             onClick={onLoadSampleData}
-            className="w-full py-2.5 px-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-extrabold text-xs hover:bg-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold text-xs hover:bg-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Muat Contoh Data Demo
+            Muat Data Demo
           </button>
         </div>
       </div>
 
-      {/* Bottom Option: Manage / Create New Project */}
-      <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-slate-800 text-slate-400">
-            <FolderKanban className="w-5 h-5 text-blue-400" />
-          </div>
-          <div>
-            <p className="font-bold text-slate-200">Ingin Membuat Project Baru / Batch Terpisah?</p>
-            <p className="text-[11px] text-slate-400">
-              Buat project terpisah untuk wilayah, kampus, atau musim Google Arcade berikutnya.
-            </p>
-          </div>
+      {/* Feature Highlights */}
+      <div className="pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-400 relative z-10">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Analisis Poin Gabungan & Tier Swag otomatis</span>
         </div>
-
-        <button
-          onClick={onOpenProjectsModal}
-          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
-        >
-          <Plus className="w-4 h-4 text-blue-400" />
-          Kelola / Buat Project
-        </button>
-      </div>
-
-      {/* Privacy Guarantee Note */}
-      <div className="pt-2 text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
-        <ShieldCheck className="w-4 h-4 text-emerald-500" />
-        <span>Penyimpanan 100% Aman & Lokal di Browser (IndexedDB Dexie). Tanpa Server Luar.</span>
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-[#fbbc04] shrink-0" />
+          <span>100% Offline-first & Data Tersimpan Lokal</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>Mendukung Multiple Project / Batch</span>
+        </div>
       </div>
     </div>
   );
