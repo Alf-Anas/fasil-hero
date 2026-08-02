@@ -1,0 +1,274 @@
+import * as XLSX from 'xlsx';
+import { db } from '../db';
+import { ParticipantRecord, RawParticipantRow, SnapshotRecord } from '../types';
+
+/**
+ * Normalizes keys of an object to handle varied column headers from Excel/CSV exports
+ */
+export function normalizeKey(key: string): string {
+  return key
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Helper to extract number from cell value
+ */
+function parseNumberCell(val: any): number {
+  if (val === undefined || val === null || val === '') return 0;
+  const num = Number(val);
+  return isNaN(num) ? 0 : num;
+}
+
+/**
+ * Helper to normalize access code status
+ */
+function normalizeAccessCodeStatus(status: any): string {
+  if (!status) return 'Belum Redeem';
+  const str = String(status).trim();
+  const lower = str.toLowerCase();
+  if (lower.includes('sudah') || lower.includes('redeemed') || lower.includes('yes') || lower.includes('ya')) {
+    return 'Sudah Redeem';
+  }
+  return 'Belum Redeem';
+}
+
+/**
+ * Parses XLSX/CSV ArrayBuffer into structured RawParticipantRow array
+ */
+export function parseExcelOrCsvBuffer(buffer: ArrayBuffer): RawParticipantRow[] {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const firstSheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[firstSheetName];
+  const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+
+  return jsonData.map((row) => {
+    const normalizedRow: Record<string, any> = {};
+    Object.keys(row).forEach((k) => {
+      normalizedRow[k.trim()] = row[k];
+    });
+
+    // Helper map lookup
+    const findVal = (...possibleHeaders: string[]) => {
+      for (const ph of possibleHeaders) {
+        const phNorm = normalizeKey(ph);
+        for (const rk of Object.keys(normalizedRow)) {
+          if (normalizeKey(rk) === phNorm || rk.toLowerCase().includes(ph.toLowerCase())) {
+            return normalizedRow[rk];
+          }
+        }
+      }
+      return '';
+    };
+
+    return {
+      'Nama Peserta': String(findVal('Nama Peserta', 'Nama', 'Participant Name', 'Name') || '').trim(),
+      'Email Peserta': String(findVal('Email Peserta', 'Email', 'Email Address', 'Participant Email') || '').trim(),
+      'Nomor HP Peserta': String(findVal('Nomor HP Peserta', 'Nomor HP', 'Phone', 'WhatsApp', 'No HP') || '').trim(),
+      'URL Profil Google Skills': String(findVal('URL Profil Google Skills', 'Google Skills URL', 'Skills Profile URL', 'Skills Boost Profile') || '').trim(),
+      'Status Google Skills URL Profil': String(findVal('Status Google Skills URL Profil', 'Status Google Skills', 'Skills Status') || 'Valid').trim(),
+      'URL Profil Google Developer': String(findVal('URL Profil Google Developer', 'Google Developer URL', 'Developer Profile URL') || '').trim(),
+      'Status URL Profil Google Developer': String(findVal('Status URL Profil Google Developer', 'Status Developer URL', 'Developer Status') || 'Valid').trim(),
+      'Status Redeem Kode Akses': String(findVal('Status Redeem Kode Akses', 'Status Redeem', 'Redeem Code Status', 'Access Code Status') || 'Belum Redeem').trim(),
+      'Milestone yang diraih': String(findVal('Milestone yang diraih', 'Milestone', 'Milestone Reached') || '').trim(),
+      'Bonus Milestone yang diraih': String(findVal('Bonus Milestone yang diraih', 'Bonus Milestone') || '').trim(),
+      'Status Verifikasi AI Agent': String(findVal('Status Verifikasi AI Agent', 'Status Verifikasi AI', 'AI Verification') || '').trim(),
+      'Lencana Digital GEAR yang diraih': String(findVal('Lencana Digital GEAR yang diraih', 'GEAR Badge', 'Digital Badge') || '').trim(),
+      'Jumlah Lencana Keahlian yang diselesaikan': parseNumberCell(findVal('Jumlah Lencana Keahlian yang diselesaikan', 'Jumlah Lencana Keahlian', 'Skill Badges Count', 'Skill Badges')),
+      'Nama Lencana Keahlian yang diselesaikan': String(findVal('Nama Lencana Keahlian yang diselesaikan', 'Nama Lencana Keahlian', 'Skill Badges Names') || '').trim(),
+      'Jumlah Arcade Game yang diselesaikan': parseNumberCell(findVal('Jumlah Arcade Game yang diselesaikan', 'Jumlah Arcade Game', 'Arcade Games Count', 'Arcade Games')),
+      'Nama Arcade Game yang diselesaikan': String(findVal('Nama Arcade Game yang diselesaikan', 'Nama Arcade Game', 'Arcade Games Names') || '').trim(),
+    };
+  });
+}
+
+/**
+ * Process raw spreadsheet rows, save snapshot & update participants database with diff detection
+ */
+export async function processAndSaveSnapshot(
+  projectId: string,
+  snapshotDate: string,
+  rows: RawParticipantRow[]
+): Promise<{ snapshotId: number; newParticipantsCount: number; totalCombined: number }> {
+  // Fetch existing participants in project to preserve wa_invited, notes, first_seen_date
+  const existingParticipantsMap = new Map<string, ParticipantRecord>();
+  const existingRecords = await db.participants.where('project_id').equals(projectId).toArray();
+  existingRecords.forEach((p) => existingParticipantsMap.set(p.email.toLowerCase(), p));
+
+  let totalSkillBadges = 0;
+  let totalArcadeGames = 0;
+  let newParticipantsCount = 0;
+
+  const updatedParticipantsToPut: ParticipantRecord[] = [];
+
+  for (const row of rows) {
+    const rawEmail = row['Email Peserta'] || '';
+    if (!rawEmail) continue; // Skip rows without email
+
+    const email = rawEmail.toLowerCase().trim();
+    const existing = existingParticipantsMap.get(email);
+
+    const skillBadges = parseNumberCell(row['Jumlah Lencana Keahlian yang diselesaikan']);
+    const arcadeGames = parseNumberCell(row['Jumlah Arcade Game yang diselesaikan']);
+
+    totalSkillBadges += skillBadges;
+    totalArcadeGames += arcadeGames;
+
+    const isNew = !existing;
+    if (isNew) {
+      newParticipantsCount++;
+    }
+
+    const firstSeenDate = existing ? existing.first_seen_date : snapshotDate;
+    const waInvited = existing ? existing.wa_invited : false;
+    const notes = existing ? existing.notes : '';
+
+    const updatedRecord: ParticipantRecord = {
+      email,
+      project_id: projectId,
+      name: row['Nama Peserta'] || email,
+      phone: row['Nomor HP Peserta'] || '',
+      skills_profile_url: row['URL Profil Google Skills'] || '',
+      skills_profile_status: row['Status Google Skills URL Profil'] || 'Valid',
+      developer_profile_url: row['URL Profil Google Developer'] || '',
+      developer_profile_status: row['Status URL Profil Google Developer'] || 'Valid',
+      access_code_status: normalizeAccessCodeStatus(row['Status Redeem Kode Akses']),
+      milestone_reached: row['Milestone yang diraih'] || '',
+      bonus_milestone_reached: row['Bonus Milestone yang diraih'] || '',
+      ai_agent_verification_status: row['Status Verifikasi AI Agent'] || '',
+      gear_digital_badge: row['Lencana Digital GEAR yang diraih'] || '',
+      skill_badges_count: skillBadges,
+      skill_badges_names: row['Nama Lencana Keahlian yang diselesaikan'] || '',
+      arcade_games_count: arcadeGames,
+      arcade_games_names: row['Nama Arcade Game yang diselesaikan'] || '',
+      wa_invited: waInvited,
+      notes: notes,
+      first_seen_date: firstSeenDate,
+      last_updated_date: snapshotDate,
+    };
+
+    updatedParticipantsToPut.push(updatedRecord);
+  }
+
+  // Save participants batch
+  await db.participants.bulkPut(updatedParticipantsToPut);
+
+  // Check if snapshot for same date exists; if so, update or delete previous
+  const existingSnapshot = await db.snapshots
+    .where('[project_id+snapshot_date]')
+    .equals([projectId, snapshotDate])
+    .first();
+
+  if (existingSnapshot && existingSnapshot.id) {
+    await db.snapshots.delete(existingSnapshot.id);
+  }
+
+  const snapshotRecord: SnapshotRecord = {
+    project_id: projectId,
+    snapshot_date: snapshotDate,
+    created_at: new Date().toISOString(),
+    total_participants: updatedParticipantsToPut.length,
+    total_skill_badges: totalSkillBadges,
+    total_arcade_games: totalArcadeGames,
+    total_combined: totalSkillBadges + totalArcadeGames,
+    raw_data_json: JSON.stringify(rows),
+  };
+
+  const snapshotId = await db.snapshots.add(snapshotRecord);
+
+  return {
+    snapshotId,
+    newParticipantsCount,
+    totalCombined: totalSkillBadges + totalArcadeGames,
+  };
+}
+
+/**
+ * Export participant data to Excel (.xlsx)
+ */
+export function exportParticipantsToExcel(
+  participants: ParticipantRecord[],
+  filename: string = 'FasilHero_Participant_Data.xlsx'
+) {
+  const exportRows = participants.map((p, idx) => ({
+    'No': idx + 1,
+    'Nama Peserta': p.name,
+    'Email Peserta': p.email,
+    'Nomor HP Peserta': p.phone,
+    'Status WA Invited': p.wa_invited ? 'Sudah Invited' : 'Belum Invited',
+    'Catatan Fasilitator': p.notes || '-',
+    'Tanggal Pertama Ditemukan': p.first_seen_date,
+    'Status Redeem Kode Akses': p.access_code_status,
+    'Jumlah Skill Badges': p.skill_badges_count,
+    'Jumlah Arcade Games': p.arcade_games_count,
+    'Total Badges + Games': p.skill_badges_count + p.arcade_games_count,
+    'Nama Skill Badges': p.skill_badges_names || '-',
+    'Nama Arcade Games': p.arcade_games_names || '-',
+    'URL Profil Skills': p.skills_profile_url || '-',
+    'URL Profil Developer': p.developer_profile_url || '-',
+    'Milestone Diraih': p.milestone_reached || '-',
+    'Lencana GEAR': p.gear_digital_badge || '-',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Participants');
+
+  // Auto column width
+  const max_widths = Object.keys(exportRows[0] || {}).map((key) => ({
+    wch: Math.max(key.length, 15),
+  }));
+  worksheet['!cols'] = max_widths;
+
+  XLSX.writeFile(workbook, filename);
+}
+
+/**
+ * Generates a downloadable Template / Sample Excel file for Facilitators
+ */
+export function downloadSampleExcelTemplate() {
+  const sampleData: RawParticipantRow[] = [
+    {
+      'Nama Peserta': 'Andi Wijaya',
+      'Email Peserta': 'andi.wijaya@example.com',
+      'Nomor HP Peserta': '081234567891',
+      'URL Profil Google Skills': 'https://www.cloudskillsboost.google/public_profiles/sample1',
+      'Status Google Skills URL Profil': 'Valid',
+      'URL Profil Google Developer': 'https://developers.google.com/profile/u/sample1',
+      'Status URL Profil Google Developer': 'Valid',
+      'Status Redeem Kode Akses': 'Sudah Redeem',
+      'Milestone yang diraih': 'Tier 1',
+      'Bonus Milestone yang diraih': 'Belum',
+      'Status Verifikasi AI Agent': 'Terverifikasi',
+      'Lencana Digital GEAR yang diraih': 'Level 1 Swag',
+      'Jumlah Lencana Keahlian yang diselesaikan': 8,
+      'Nama Lencana Keahlian yang diselesaikan': 'Baseline: Infrastructure, BigQuery Basics',
+      'Jumlah Arcade Game yang diselesaikan': 5,
+      'Nama Arcade Game yang diselesaikan': 'Trivia July 2026 Week 1, Week 2',
+    },
+    {
+      'Nama Peserta': 'Bina Lestari',
+      'Email Peserta': 'bina.lestari@example.com',
+      'Nomor HP Peserta': '085678901235',
+      'URL Profil Google Skills': 'https://www.cloudskillsboost.google/public_profiles/sample2',
+      'Status Google Skills URL Profil': 'Valid',
+      'URL Profil Google Developer': 'https://developers.google.com/profile/u/sample2',
+      'Status URL Profil Google Developer': 'Valid',
+      'Status Redeem Kode Akses': 'Belum Redeem',
+      'Milestone yang diraih': 'Belum',
+      'Bonus Milestone yang diraih': 'Belum',
+      'Status Verifikasi AI Agent': 'Pending',
+      'Lencana Digital GEAR yang diraih': 'Belum',
+      'Jumlah Lencana Keahlian yang diselesaikan': 2,
+      'Nama Lencana Keahlian yang diselesaikan': 'A Tour of Google Cloud Hands-on Labs',
+      'Jumlah Arcade Game yang diselesaikan': 1,
+      'Nama Arcade Game yang diselesaikan': 'Arcade Starter Game',
+    },
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(sampleData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Google Arcade Data');
+  XLSX.writeFile(workbook, 'Template_Google_Arcade_Facilitator_2026.xlsx');
+}

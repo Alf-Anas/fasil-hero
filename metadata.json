@@ -1,0 +1,6 @@
+{
+  "name": "FasilHero",
+  "description": "Google Arcade Facilitator 2026 Participant Tracking & Milestone Analytics Dashboard",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
