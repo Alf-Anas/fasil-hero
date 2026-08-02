@@ -15,9 +15,11 @@ import {
   Check,
   Info,
   Layers,
+  Trophy,
 } from 'lucide-react';
 import { ParticipantRecord } from '../types';
 import { db } from '../db';
+import { PARTICIPANT_MILESTONES_CONFIG, calculateHighestMilestone } from '../utils/milestones';
 
 interface ParticipantTableProps {
   participants: ParticipantRecord[];
@@ -42,6 +44,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
   const [waInviteFilter, setWaInviteFilter] = useState<string>('ALL'); // ALL, INVITED, NOT_INVITED
   const [firstSeenFilter, setFirstSeenFilter] = useState<string>('ALL');
   const [badgeTierFilter, setBadgeTierFilter] = useState<string>('ALL'); // ALL, ZERO, 1_10, 11_25, 26_PLUS
+  const [milestoneFilter, setMilestoneFilter] = useState<string>('ALL'); // ALL, ULTIMATE, M3, M2, M1, NONE
   const [onlyNewFilter, setOnlyNewFilter] = useState<boolean>(false);
 
   // Notes Modal state
@@ -134,6 +137,15 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
       if (badgeTierFilter === '11_25' && (totalCombined < 11 || totalCombined > 25)) return false;
       if (badgeTierFilter === '26_PLUS' && totalCombined < 26) return false;
 
+      if (milestoneFilter !== 'ALL') {
+        const highest = p.calculated_milestone || calculateHighestMilestone(p.arcade_games_count, p.skill_badges_count);
+        if (milestoneFilter === 'ULTIMATE' && highest !== 'Ultimate Milestone') return false;
+        if (milestoneFilter === 'M3' && highest !== 'Milestone 3') return false;
+        if (milestoneFilter === 'M2' && highest !== 'Milestone 2') return false;
+        if (milestoneFilter === 'M1' && highest !== 'Milestone 1') return false;
+        if (milestoneFilter === 'NONE' && highest !== 'Belum Milestone') return false;
+      }
+
       if (onlyNewFilter && p.first_seen_date !== selectedSnapshotDate) return false;
 
       return true;
@@ -145,13 +157,14 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
     waInviteFilter,
     firstSeenFilter,
     badgeTierFilter,
+    milestoneFilter,
     onlyNewFilter,
     selectedSnapshotDate,
   ]);
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, redeemFilter, waInviteFilter, firstSeenFilter, badgeTierFilter, onlyNewFilter]);
+  }, [searchTerm, redeemFilter, waInviteFilter, firstSeenFilter, badgeTierFilter, milestoneFilter, onlyNewFilter]);
 
   const totalPages = Math.ceil(filteredParticipants.length / pageSize) || 1;
   const paginatedParticipants = useMemo(() => {
@@ -187,7 +200,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
 
       {/* Filter Toolbar */}
       <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search Bar */}
           <div className="relative lg:col-span-2">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -206,6 +219,25 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                 ✕
               </button>
             )}
+          </div>
+
+          {/* Filter Milestone Peserta */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+              Milestone Peserta
+            </label>
+            <select
+              value={milestoneFilter}
+              onChange={(e) => setMilestoneFilter(e.target.value)}
+              className="w-full py-2 px-2 text-xs bg-slate-900 text-slate-100 rounded-lg border border-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="ALL">Semua Milestone</option>
+              <option value="ULTIMATE">🏆 Ultimate Milestone</option>
+              <option value="M3">🥇 Milestone 3</option>
+              <option value="M2">🥈 Milestone 2</option>
+              <option value="M1">🥉 Milestone 1</option>
+              <option value="NONE">⚪ Belum Milestone</option>
+            </select>
           </div>
 
           {/* Filter Status Redeem */}
@@ -301,7 +333,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               </span>
             </label>
 
-            {(searchTerm || redeemFilter !== 'ALL' || waInviteFilter !== 'ALL' || firstSeenFilter !== 'ALL' || badgeTierFilter !== 'ALL' || onlyNewFilter) && (
+            {(searchTerm || redeemFilter !== 'ALL' || waInviteFilter !== 'ALL' || firstSeenFilter !== 'ALL' || badgeTierFilter !== 'ALL' || milestoneFilter !== 'ALL' || onlyNewFilter) && (
               <button
                 onClick={() => {
                   setSearchTerm('');
@@ -309,6 +341,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                   setWaInviteFilter('ALL');
                   setFirstSeenFilter('ALL');
                   setBadgeTierFilter('ALL');
+                  setMilestoneFilter('ALL');
                   setOnlyNewFilter(false);
                 }}
                 className="text-xs text-blue-400 font-medium hover:underline ml-auto"
@@ -328,6 +361,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
               <th className="py-3 px-3 w-10 text-center">No</th>
               <th className="py-3 px-3">Peserta & WA Link</th>
               <th className="py-3 px-3 text-center">Status Redeem</th>
+              <th className="py-3 px-3 text-center">Milestone Peserta</th>
               <th className="py-3 px-3 text-center">WA Invited</th>
               <th className="py-3 px-3 text-center">Skill</th>
               <th className="py-3 px-3 text-center">Arcade</th>
@@ -339,7 +373,7 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
           <tbody className="divide-y divide-slate-800/60">
             {paginatedParticipants.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-slate-500">
+                <td colSpan={10} className="py-12 text-center text-slate-500">
                   <Info className="w-8 h-8 mx-auto mb-2 text-slate-600" />
                   Tidak ada peserta yang cocok dengan filter.
                 </td>
@@ -405,6 +439,82 @@ export const ParticipantTable: React.FC<ParticipantTableProps> = ({
                           <XCircle className="w-3 h-3 text-rose-400" /> Belum
                         </span>
                       )}
+                    </td>
+
+                    {/* Milestone Peserta & Snapshot Date */}
+                    <td className="py-3 px-3 text-center">
+                      {(() => {
+                        const highest = p.calculated_milestone || calculateHighestMilestone(p.arcade_games_count, p.skill_badges_count);
+                        const dateMap: Record<string, string | undefined> = {
+                          'Ultimate Milestone': p.ultimate_milestone_date,
+                          'Milestone 3': p.milestone_3_date,
+                          'Milestone 2': p.milestone_2_date,
+                          'Milestone 1': p.milestone_1_date,
+                        };
+                        const achievedDate = dateMap[highest];
+
+                        if (highest === 'Ultimate Milestone') {
+                          return (
+                            <div className="flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                🏆 Ultimate
+                              </span>
+                              {achievedDate && (
+                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                  {achievedDate}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (highest === 'Milestone 3') {
+                          return (
+                            <div className="flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                🥇 Milestone 3
+                              </span>
+                              {achievedDate && (
+                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                  {achievedDate}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (highest === 'Milestone 2') {
+                          return (
+                            <div className="flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                🥈 Milestone 2
+                              </span>
+                              {achievedDate && (
+                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                  {achievedDate}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (highest === 'Milestone 1') {
+                          return (
+                            <div className="flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                🥉 Milestone 1
+                              </span>
+                              {achievedDate && (
+                                <span className="text-[9px] text-slate-400 font-mono mt-0.5" title={`Dicapai pada snapshot ${achievedDate}`}>
+                                  {achievedDate}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Belum
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* WA Invited Toggle */}

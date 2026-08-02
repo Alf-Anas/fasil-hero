@@ -10,9 +10,13 @@ import {
   XCircle,
   PhoneCall,
   Save,
+  Trophy,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 import { ParticipantRecord } from '../types';
 import { db } from '../db';
+import { PARTICIPANT_MILESTONES_CONFIG, getMilestoneTierProgress } from '../utils/milestones';
 
 interface ParticipantDetailModalProps {
   participant: ParticipantRecord | null;
@@ -199,6 +203,101 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 Profil Developer tidak tersedia
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Participant Milestones & Snapshot Achievement History */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <Trophy className="w-4 h-4 text-[#fbbc04]" />
+              Pencapaian Milestone Peserta & Snapshot
+            </h3>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
+              Poin: {participant.arcade_games_count} Arcade • {participant.skill_badges_count} Skills
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {PARTICIPANT_MILESTONES_CONFIG.map((cfg) => {
+              const dateMap: Record<string, string | undefined> = {
+                m1: participant.milestone_1_date,
+                m2: participant.milestone_2_date,
+                m3: participant.milestone_3_date,
+                ultimate: participant.ultimate_milestone_date,
+              };
+
+              const snapshotAchievedDate = dateMap[cfg.id];
+              const prog = getMilestoneTierProgress(
+                participant.arcade_games_count,
+                participant.skill_badges_count,
+                cfg.requiredArcade,
+                cfg.requiredSkill
+              );
+
+              return (
+                <div
+                  key={cfg.id}
+                  className={`p-3.5 rounded-2xl border transition-all ${
+                    prog.isAchieved
+                      ? `${cfg.bgClass} ${cfg.borderClass}`
+                      : 'bg-slate-950/80 border-slate-800/80'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{cfg.badgeEmoji}</span>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-white">{cfg.name}</h4>
+                        <p className="text-[10px] text-slate-400">
+                          Syarat: <strong>{cfg.requiredArcade} Arcade</strong> & <strong>{cfg.requiredSkill} Skills</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    {prog.isAchieved ? (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${cfg.badgeClass}`}>
+                        Selesai
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-900 text-slate-400 border border-slate-800 shrink-0">
+                        Belum
+                      </span>
+                    )}
+                  </div>
+
+                  {prog.isAchieved ? (
+                    <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center gap-1.5 text-[11px] font-semibold text-slate-200">
+                      <Calendar className="w-3.5 h-3.5 text-[#fbbc04] shrink-0" />
+                      <span>
+                        Dicapai pada Snapshot:{' '}
+                        <strong className="text-white font-mono">{snapshotAchievedDate || participant.first_seen_date || 'Terbaru'}</strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                        <span>Arcade: {participant.arcade_games_count}/{cfg.requiredArcade}</span>
+                        <span>Skills: {participant.skill_badges_count}/{cfg.requiredSkill}</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden flex border border-slate-800">
+                        <div
+                          className="bg-amber-400 h-full transition-all"
+                          style={{ width: `${prog.arcadeProgress}%` }}
+                        />
+                        <div
+                          className="bg-emerald-400 h-full transition-all"
+                          style={{ width: `${prog.skillProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500 italic">
+                        Kurang: {prog.arcadeNeeded > 0 ? `${prog.arcadeNeeded} Arcade` : ''} {prog.arcadeNeeded > 0 && prog.skillNeeded > 0 ? ' & ' : ''} {prog.skillNeeded > 0 ? `${prog.skillNeeded} Skill Badges` : ''}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

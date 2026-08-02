@@ -36,6 +36,13 @@ export interface ParticipantRecord {
   skill_badges_names?: string;
   arcade_games_count: number;
   arcade_games_names?: string;
+
+  // Calculated Milestone Fields
+  calculated_milestone?: string; // "Ultimate Milestone" | "Milestone 3" | "Milestone 2" | "Milestone 1" | "Belum Milestone"
+  milestone_1_date?: string;
+  milestone_2_date?: string;
+  milestone_3_date?: string;
+  ultimate_milestone_date?: string;
   
   // Custom Facilitator Fields
   wa_invited: boolean;

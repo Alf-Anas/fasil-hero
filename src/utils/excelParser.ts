@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { db } from '../db';
 import { ParticipantRecord, RawParticipantRow, SnapshotRecord } from '../types';
+import { calculateHighestMilestone } from './milestones';
 
 /**
  * Normalizes keys of an object to handle varied column headers from Excel/CSV exports
@@ -277,6 +278,27 @@ export async function recalculateProjectData(projectId: string): Promise<{
       const phone = row['Nomor HP Peserta'] ||
         (existingInRecalc ? existingInRecalc.phone : manualInfo ? manualInfo.phone : '');
 
+      // Milestone calculation & snapshot date tracking
+      let m1_date = existingInRecalc?.milestone_1_date;
+      let m2_date = existingInRecalc?.milestone_2_date;
+      let m3_date = existingInRecalc?.milestone_3_date;
+      let ult_date = existingInRecalc?.ultimate_milestone_date;
+
+      if (arcadeGames >= 6 && skillBadges >= 14 && !m1_date) {
+        m1_date = snap.snapshot_date;
+      }
+      if (arcadeGames >= 8 && skillBadges >= 28 && !m2_date) {
+        m2_date = snap.snapshot_date;
+      }
+      if (arcadeGames >= 10 && skillBadges >= 42 && !m3_date) {
+        m3_date = snap.snapshot_date;
+      }
+      if (arcadeGames >= 12 && skillBadges >= 56 && !ult_date) {
+        ult_date = snap.snapshot_date;
+      }
+
+      const calculatedMilestone = calculateHighestMilestone(arcadeGames, skillBadges);
+
       const updatedRecord: ParticipantRecord = {
         email,
         project_id: projectId,
@@ -295,6 +317,11 @@ export async function recalculateProjectData(projectId: string): Promise<{
         skill_badges_names: row['Nama Lencana Keahlian yang diselesaikan'] || '',
         arcade_games_count: arcadeGames,
         arcade_games_names: row['Nama Arcade Game yang diselesaikan'] || '',
+        calculated_milestone: calculatedMilestone,
+        milestone_1_date: m1_date,
+        milestone_2_date: m2_date,
+        milestone_3_date: m3_date,
+        ultimate_milestone_date: ult_date,
         wa_invited: waInvited,
         notes: notes,
         first_seen_date: firstSeenDate,
@@ -356,7 +383,12 @@ export function exportParticipantsToExcel(
     'Nama Arcade Games': p.arcade_games_names || '-',
     'URL Profil Skills': p.skills_profile_url || '-',
     'URL Profil Developer': p.developer_profile_url || '-',
-    'Milestone Diraih': p.milestone_reached || '-',
+    'Kalkulasi Milestone': p.calculated_milestone || 'Belum Milestone',
+    'Tanggal Milestone 1': p.milestone_1_date || '-',
+    'Tanggal Milestone 2': p.milestone_2_date || '-',
+    'Tanggal Milestone 3': p.milestone_3_date || '-',
+    'Tanggal Ultimate Milestone': p.ultimate_milestone_date || '-',
+    'Milestone Raw Spreadsheet': p.milestone_reached || '-',
     'Lencana GEAR': p.gear_digital_badge || '-',
   }));
 

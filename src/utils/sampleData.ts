@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { ParticipantRecord, RawParticipantRow, SnapshotRecord } from '../types';
+import { recalculateProjectData } from './excelParser';
 
 export const SAMPLE_PARTICIPANTS_DATA: Array<{
   name: string;
@@ -391,4 +392,7 @@ export async function seedSampleData(force = false, targetProjectId: string): Pr
 
     await db.snapshots.add(snapshotRecord);
   }
+
+  // Recalculate milestone data across all snapshots
+  await recalculateProjectData(targetProjectId);
 }
